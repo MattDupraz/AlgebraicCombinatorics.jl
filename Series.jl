@@ -93,23 +93,29 @@ end
 # series exp(t) around t=0
 
 struct ExpSeries <: AbstractSeries
+    t
+    ExpSeries(t) = new(t)
+    ExpSeries() = new(1)
 end
 
 function get_coeff(series::ExpSeries, deg)
-	return 1//factorial(deg)
+    return (series.t^deg)//factorial(deg)
 end
 
 # Log series
 # series of log(1 + t) around t = 0
 
 struct LogSeries <: AbstractSeries
+    t
+    LogSeries(t) = new(t)
+    LogSeries() = new(1)
 end
 
 function get_coeff(series::LogSeries, deg)
 	if deg % 2 == 0
-		return 1//deg
+        return (series.t^deg)//deg
 	else
-		return -1//deg
+		return -(series.t^deg)//deg
 	end
 end
 
