@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.4
+# v0.20.18
 
 using Markdown
 using InteractiveUtils
@@ -7,11 +7,11 @@ using InteractiveUtils
 # ╔═╡ a3e5efb2-f8ef-45e7-be41-b1b05a6253bb
 using Polymake: Polymake, polytope, matroid, graph, LibPolymake.BigObjectAllocated as PMBigObject, @pm, common
 
-# ╔═╡ fae50ce3-b791-4012-a202-57c6cdf8db6f
-using Combinatorics:powerset
+# ╔═╡ 1c9ecfc8-a36a-477b-9670-822fe20bd873
+using DataStructures
 
-# ╔═╡ 719a18c6-4dd9-4633-9d5d-771bbd858ab4
-using XML
+# ╔═╡ fae50ce3-b791-4012-a202-57c6cdf8db6f
+using Combinatorics:powerset, permutations
 
 # ╔═╡ 0f14d7f7-16d3-4c1e-9b47-195c5c5abbe2
 using Latexify
@@ -20,97 +20,54 @@ using Latexify
 using SimplePlutoInclude
 
 # ╔═╡ 747f9307-4f18-4d8d-b85d-691da228aeb1
-using LinearAlgebra: I
+using LinearAlgebra: I, det
 
-# ╔═╡ 189b646c-1812-4b35-a433-718e2580346a
+# ╔═╡ 1300785b-a1b4-469b-af15-d74269b8f790
+using SHA
+
+# ╔═╡ df693074-1d7b-4280-a7d2-7aa1ed25b691
 using Serialization
+
+# ╔═╡ f054e974-f9cc-4065-97ae-3b0aa1ab4522
+using XML
 
 # ╔═╡ 5b2c43a4-dd97-11ef-1c79-1b5007c54b8d
 import Symbolics as Sym
 
-# ╔═╡ 56f1afbd-91a7-4820-9ac4-88eedfc843e9
-@plutoinclude "Series.jl" all=false
+# ╔═╡ 312dfd9d-e4d0-4fac-a2eb-0191020ff66a
+@plutoinclude "LinAlgTools.jl" all=false
 
-# ╔═╡ 76e48c1c-913a-4d39-ab5b-25654c3daa87
-function remember(str, fun, args...)
-	filename = "cache/$str.dat"
-	try
-		return deserialize(filename)
-	catch
+# ╔═╡ 956e09aa-578e-4226-9189-9def91b2dd94
+@plutoinclude "Matroids.jl" all=false
+
+# ╔═╡ b8485207-4ed1-48a2-b27a-90cb65097613
+macro cache(expr, clear=nothing)
+	hash = bytes2hex(sha256(string(expr)))
+	filename = ".cache/$hash"
+
+	compute_and_cache = :(
+		begin
 		try
-			mkdir("cache")
+			mkdir(".cache")
 		catch
 		end
-		result = fun(args...);
-		serialize(filename, result);
-		return result
-	end
-end
-
-# ╔═╡ bded0dea-feb6-4156-9c5e-69e95325089a
-function get_latte_string(P)
-	result = ""
-	facets = Matrix(P.FACETS)
-	linearity = Matrix(P.AFFINE_HULL)
-	A = [facets; linearity]
-	denoms = reduce(lcm, denominator.(A);
-					init=BigInt(1),
-					dims=2)
-	A = A .* denoms
-	d = size(A)
-	result *= "$(d[1]) $(d[2])\n"
-	for i in 1:size(A, 1)
-		for j in 1:size(A, 2)
-			result *= "$(A[i, j]) "
+		temp = $expr;
+		serialize($filename, temp);
+		temp
 		end
-		result *= "\n"
-	end
-	n_facets = size(facets, 1)
-	n_lin = size(linearity, 1)
-	if n_lin >= 1
-		result *= "linearity $n_lin "
-		for i in 1:n_lin
-			result *= "$(n_facets + i) "
-		end
-	end
-	return result
-end
+	)
 
-# ╔═╡ 3c9f89cf-c45e-4943-a375-99cb35c630ad
-function count_lattice_points(P)
-	str = get_latte_string(P)
-	uid = rand(UInt32)
-
-	dir = "temp-$uid"
-	mkdir(dir)
+	if clear != nothing
+		return compute_and_cache
+	end
 	
-	write("$dir/polytope", str)
-
-	run(pipeline(Cmd(`latte-count polytope`, dir=dir); stdout=devnull, stderr=devnull))
-	result = parse(BigInt, read("$dir/numOfLatticePoints", String))
-
-	rm(dir; recursive=true, force=true)
-	return result
-end
-
-# ╔═╡ 6ae0a0b0-0134-4cc3-a52d-fda551ace3c3
-struct SVGVisual
-	obj::PMBigObject
-end
-
-# ╔═╡ 56fea39d-0a9d-4f70-8892-934a88264123
-function Base.show(io::IO, ::MIME"image/svg+xml", x::PMBigObject)
-	xml_str = Polymake._get_visual_string_svg(Polymake.visual(Polymake.Visual, x))
-	doc = parse(Node, xml_str)
-	doc[3]["style"] = "background: #ffffff"
-	doc[3]["width"] = "100%"
-	doc[3]["height"] = ""
-	print(io, XML.write(doc))
-end
-
-# ╔═╡ db24b03a-02dc-4d9b-834d-b4387b46c875
-function Base.show(io::IO, ::MIME"image/svg+xml", svg::SVGVisual)
-	show(io, MIME("image/svg+xml"), svg.obj)
+	return :(
+		try
+			deserialize($filename)
+		catch
+			$compute_and_cache
+		end
+	)
 end
 
 # ╔═╡ 65b8f904-b394-464f-a8c7-cd6ac88ca6e0
@@ -120,114 +77,12 @@ function binomial(x::Number, k::Integer)
     return prod(i -> (x-i+1)//i, 1:k)
 end
 
-# ╔═╡ cda53267-e690-4891-9a53-581e1ff683dd
-struct Matroid
-	n_elements::Int
-	rank::Int
-	flats::Vector{Set{Int}}
-	ranks::Vector{Int}
-	pm_matroid::PMBigObject
-	function Matroid(M::PMBigObject)
-		arr = Polymake.Array(M.LATTICE_OF_FLATS.DECORATION)
-		flats = [Polymake.decoration_face(dec) for dec in arr]
-		ranks = [Polymake.decoration_rank(dec) for dec in arr]
-		new(M.N_ELEMENTS, M.RANK, flats, ranks, M)
-	end
-end
-
-# ╔═╡ 002a96fe-1395-4200-9074-dcc591b39fc1
-function svg_visual(M::Matroid)
-	SVGVisual(M.pm_matroid.LATTICE_OF_FLATS)
-end
-
-# ╔═╡ 5174ba72-74e8-4ae2-b504-fa4a36f84b01
-function groundset(M::Matroid)
-	return 0:M.n_elements - 1
-end
-
-# ╔═╡ 4d2d10ad-55e0-4f69-a52f-fac7ad0c3b5d
-# ╠═╡ disabled = true
-#=╠═╡
-M = Matroid(matroid.fano_matroid())
-  ╠═╡ =#
-
-# ╔═╡ dfdeb32d-6c6e-4704-8006-ad7ab1233ed7
-function get_flat_index(M, S)
-	findfirst(map(F -> issetequal(S, F), M.flats))
-end
-
-# ╔═╡ eb4541cd-29fc-4f41-b668-97701ba9efbe
-function meet(M, Fs)
-	S = intersect([M.flats[i] for i in Fs]...)
-	get_flat_index(M, S)
-end
-
-# ╔═╡ 2f0ed098-5d7e-4f3e-8ef0-97cb09d9dad4
-function closure(M, S)
-	get_flat_index(M, intersect(filter(F -> S ⊆ F, M.flats)...))
-end
-
-# ╔═╡ 4fb7b3e5-86d5-4b6a-94f8-b155ab1b6e2d
-function join(M, Fs)
-	S = union([M.flats[i] for i in Fs]...)
-	closure(M, S)
-end
-
-# ╔═╡ 8176fa85-c220-4c41-a221-9f48eb090e74
-function flats_of_rank_range(M, r, s)
-	return [i for i in 1:length(M.flats)
-		if r <= M.ranks[i] && M.ranks[i] <= s ]
-end
-
-# ╔═╡ ff29b293-0bb7-491c-85da-1112d61a5f32
-function nonempty_flats(M)
-    return flats_of_rank_range(M, 1, M.rank)
-end
-
-# ╔═╡ ceab87f9-4a40-4de4-9b16-49141064393a
-function nonempty_proper_flats(M)
-    return flats_of_rank_range(M, 1, M.rank - 1)
-end
-
-# ╔═╡ 1c071329-005a-496e-ad78-f535286e7d6c
-#=╠═╡
-M.flats
-  ╠═╡ =#
-
-# ╔═╡ 39164e66-13d0-483c-b0f4-9cedb5d030d4
-#=╠═╡
-closure(M, Set([0, 4]))
-  ╠═╡ =#
-
-# ╔═╡ 4b85ad51-8cc6-4382-966e-dc6ce3172690
-# Return the chains of flats from Fs
-function chains(M, Fs; tail=[])
-	cs = [tail]
-    for F in Fs
-        if isempty(tail) || M.flats[F] ⊊ M.flats[first(tail)]
-            append!(cs, chains(M, Fs; tail=[F; tail]))
-		end
-	end
-	return cs
-end
-
-# ╔═╡ 00681b2c-6ae0-48b5-8cfd-29d90384a7dd
-# Returns the non-empty chains of proper nonempty flats of M
-function chains(M)
-	return filter(!isempty, chains(M, nonempty_proper_flats(M)))
-end
-
-# ╔═╡ 686dd79f-4815-455c-8123-f60e7656357c
-#=╠═╡
-chains(M)
-  ╠═╡ =#
-
 # ╔═╡ 960fc95e-b0f4-4fce-8481-8ffec865bf33
 function f_to_h(M)
 	nep_flats = nonempty_proper_flats(M)
     n = length(nep_flats)
-    f = Symbolics.variables(:f, nonempty_flats(M))
-    h = Symbolics.variables(:h, nep_flats)
+    f = Sym.variables(:f, nonempty_flats(M))
+    h = Sym.variables(:h, nep_flats)
 
 	A = Rational.(reduce(hcat, [-1 * [M.flats[F] ⊆ M.flats[G] for G in nep_flats]
                                 for F in nep_flats
@@ -238,8 +93,8 @@ end
 # ╔═╡ e27d30dc-5f52-468d-b482-2edf6aa67c88
 function h_to_f(M)
 	nep_flats = nonempty_proper_flats(M)
-    f = Symbolics.variables(:f, nonempty_flats(M))
-    h = Symbolics.variables(:h, nep_flats)
+    f = Sym.variables(:f, nonempty_flats(M))
+    h = Sym.variables(:h, nep_flats)
 	
     # Hyperplane class
     H = [groundset(M)[1] ∈ M.flats[F] for F in nep_flats] 
@@ -261,24 +116,10 @@ function m_vectors_iter(max_m, max_sum)
 		0:min(max_m[1], max_sum))
 end
 
-# ╔═╡ 73a9d5f0-cade-432f-aeeb-6f530532342d
-function vectors_less_than(vec)
-	if length(vec) == 1
-		return 0:vec[1]
-	end
-	return Iterators.flatmap(
-		n -> Iterators.product(n, vectors_less_than(vec[2:length(vec)]))
-				.|> t -> [t[1]; t[2]],
-		0:vec[1])
-end
-
 # ╔═╡ e7806bb9-3fa0-4395-99ea-28f0b9f2b98c
-# ╠═╡ disabled = true
-#=╠═╡
 function vectors_less_than(vec)
 	return Iterators.product([0:n for n in vec]...)
 end
-  ╠═╡ =#
 
 # ╔═╡ 2bd8e1ac-471c-435c-af62-717c1d50d8e0
 function snapper_polynomial(M)
@@ -327,77 +168,6 @@ function homogeneize(A)
 	return [ones(Rational, size(A, 1)) A]
 end
 
-# ╔═╡ dcbe98d9-25a6-4666-a7ff-57b28a6d1eb2
-# the ws are the corners of the combinatorial hypercube
-function get_w(r, h, k)
-	# k corresponds to a given corner of the hypercube - J is the collection of corresponding rays
-	J = [(k >> i) % 2 == 1 for i in 0:size(r, 1)-1]
-	# if k=0, return simply the zero vector
-	if iszero(J)
-		return zero(r[1, :])
-	end
-	# restrict h and r to the rays in J
-	h_ = h[J]
-	r_ = r[J, :]
-	# find the point that projects to h_ in the span of r_
-	return r_' * inv(r_ * r_') * h_
-end
-
-# ╔═╡ d0adbc23-f2e2-46de-af36-55c2e5a4f276
-function get_ws(r, h)
-    return hcat(map(k -> get_w(r, h, k), 0:2^size(r, 1) - 1)...)'
-end
-
-# ╔═╡ eb00d49e-7107-4a43-a4fb-1c359138d252
-function cone_lattice_count(B, r, h)
-	w = get_ws(r, h)
-    y = w * B
-	P = polytope.Polytope(POINTS=homogeneize(y))
-    return count_lattice_points(P)
-end
-
-# ╔═╡ 9fcad0b6-ac34-4286-b54f-f26b6a70291e
-function get_polytope(B, r, h)
-	w = get_ws(r, h)
-    y = w * B
-	P = polytope.Polytope(POINTS=homogeneize(y))
-	return P
-end
-
-# ╔═╡ ee4558c0-af44-4aa5-a863-426ca84c0a8d
-function compute_lattice_counts_parallel(B, r, hs)
-	polytopes = hs .|> h -> get_polytope(B, r, h)
-	latte_strs = polytopes .|> P -> get_latte_string(P)
-	results = zeros(BigInt, size(polytopes))
-
-	Threads.@threads for i in 1:length(polytopes)
-		uid = rand(UInt32)
-		dir = "temp-$uid"
-		mkdir(dir)
-		
-		write("$dir/polytope", latte_strs[i])
-		
-		run(pipeline(Cmd(`latte-count polytope`, dir=dir); stdout=devnull, stderr=devnull))
-		result = parse(BigInt, read("$dir/numOfLatticePoints", String))
-		
-		rm(dir; recursive=true, force=true)
-		results[i] = result
-	end
-	return results
-end
-
-# ╔═╡ dfefa444-3fbc-42a4-96aa-c2af75f00425
-function extract_basis(vs)
-    B = vs[1:1, :]
-    for row in 2:size(vs, 1)
-		v = vs[row, :]'
-        if v * B' * inv(B * B') * B != v
-            B = [B; v]
-        end
-    end
-    return B
-end
-
 # ╔═╡ 211351c0-cdc2-4635-b75c-cdfab56dec1b
 # returns all monomials in n_var variables of degree at most deg, represented as vectors of size n_var
 function monomials_iter(deg, n_vars)
@@ -408,22 +178,6 @@ function monomials_iter(deg, n_vars)
 		n -> Iterators.product(n, monomials_iter(deg - n, n_vars - 1))
 				.|> t -> [t[1]; t[2]],
 		0:deg)
-end
-
-# ╔═╡ 0863c1fb-eac8-4839-808f-1c0c69937e19
-function interpolate_polynomial(xs, ys, vars, deg)
-	monomials = monomials_iter(deg, length(vars))
-	# M records the values of the monomials at the sample points xs
-	M = (
-		reduce(hcat, [[prod(x.^m) for m in monomials] for x in xs])
-	)'
-	# M should be invertible and we should have M * [a_1, ..., a_n] = ys, where the a_i are the coefficients of each monomial in the polynomial
-	return dot(inv(M) * ys, [prod(vars .^ m) for m in monomials])
-end
-
-# ╔═╡ 1aac79d1-623a-4123-92f5-17949b3b70e0
-function homogenize(v::Vector; index=1)
-	return [v[1:index-1]; 1; v[index:length(v)]]
 end
 
 # ╔═╡ 70c9dc2b-ee54-4efe-83c5-ac2224bbf667
@@ -451,61 +205,41 @@ function to_matrix(vs)
 	return reduce(vcat, [v' for v in vs])
 end
 
-# ╔═╡ ac0d7d98-5a89-4749-8ad4-9fab2258ebbb
-function fundamental_parallelogram(rays)
-	vertices = reduce(vcat, 
-				[sum(rays[J, :], dims=1) for J in powerset(1:size(rays, 1))])
-	return polytope.Polytope(POINTS=homogenize(vertices))
-end
-
-# ╔═╡ 2de7a938-5313-46f6-8b4d-2ad7274763cf
-function brion_generators(rays)
-	P = fundamental_parallelogram(rays)
-	lattice_points = dehomogenize(Matrix{Int}(polytope.lattice_points(P)))
-	generators = []
-	A = rays' * inv(rays * rays')
-	for i in 1:size(lattice_points, 1)
-		p = lattice_points[i, :]
-		coords = p' * A
-		if all(coords .< 1)
-			push!(generators, p)
-		end
-	end
-	return generators
-end
-
-# ╔═╡ 1ed37f79-88f3-47af-a954-e0f566791251
-function brion_rational_function(rays)
-	vars = Sym.variables(:x, 1:size(rays, 2))
-	numerator = sum([prod(vars .^ Vector{Int}(gen)) for gen in brion_generators(rays)])
-	
-	denom_factors = [1//1 - prod(vars .^ ray) for ray in to_array(rays)]
-
-	denom_factors_correction = [prod(vars .^[max(0, Int(-i)) for i in ray]) for ray in to_array(rays)]
-	
-	total_correction = prod(denom_factors_correction)
-	
-	denominator = Sym.expand(prod(denom_factors .* denom_factors_correction))
-
-	numerator = total_correction * numerator
-	
-	return numerator, denominator
-end
-
 # ╔═╡ 7af6967b-1c9b-4fc7-b00d-4fb7cc589547
 function ray_gen(r)
 	return r // gcd(r...)
 end
 
+# ╔═╡ dcbe98d9-25a6-4666-a7ff-57b28a6d1eb2
+# the ws are the corners of the combinatorial hypercube
+function get_w(R::AbstractMatrix{Rational{T}}, h, k) where T
+	# k corresponds to a given corner of the hypercube - J is the collection of corresponding rays
+	J = [(k >> i) % 2 == 1 for i in 0:size(R, 1)-1]
+	# if k=0, return simply the zero vector
+	if iszero(J)
+		return zero(R[1, :])
+	end
+	# restrict h and r to the rays in J
+	h_ = h[J]
+	R_ = R[J, :]
+	# find the point that projects to h_ in the span of r_
+	return R_' * inv(R_ * R_') * h_
+end
+
+# ╔═╡ d0adbc23-f2e2-46de-af36-55c2e5a4f276
+function get_ws(R::AbstractMatrix{Rational{T}}, h) where T <: Integer
+    return map(k -> get_w(R, h, k), 0:2^size(R, 1) - 1)
+end
+
 # ╔═╡ 01189806-4949-47be-b510-115b62c0bde0
-function get_hypercube_cones(verts)
-	dim = Int(log2(size(verts, 1)))
-	cones = []
-	for i in 1:size(verts, 1)
-		base = verts[i, :]
+function get_hypercube_cones(verts::AbstractVector{<:AbstractVector{Rational{T}}}) where T <: Integer
+	dim = Int(log2(length(verts)))
+	cones = Matrix{Rational{T}}[]
+	for i in 1:length(verts)
+		base = verts[i]
 		rays = []
 		for j in 0:dim-1
-			v = verts[xor(i - 1, 1 << j) + 1, :]
+			v = verts[xor(i - 1, 1 << j) + 1]
 			push!(rays, ray_gen(v - base))
 		end
 		push!(cones, to_matrix(rays))
@@ -513,75 +247,25 @@ function get_hypercube_cones(verts)
 	return cones
 end
 
-# ╔═╡ 2dbb1bb4-30f9-4511-9b37-1967e2b17ede
-function get_an_integer_vector(k, dim)
-	result = zeros(Int, dim)
-	e = 0
-	while k != 0
-		for i in 1:dim
-			result[i] += 2^e * (k % 2)
-			k >>= 1
-		end
-		e += 1
-	end
-	return result
-end
-
-# ╔═╡ ccec7fe9-dd54-446a-851b-1e808637d1f0
-function find_good_lambda(A)
-	k = 1
-	while true
-		lambda = get_an_integer_vector(k, size(A, 2))
-		if all(A * lambda .!= 0)
-			return lambda
-		end
-		k += 1
-	end
-end
-
-# ╔═╡ 6b4f88f9-7504-45d8-9438-5343cbbbb015
-function compute_lattice_count(vertices, cones)
-	funcs = brion_rational_function.(cones)
-	lambda = find_good_lambda(reduce(vcat, cones))
-
-	x = Sym.variables(:x, 1:size(vertices, 2))
-	s = Sym.variable(:s)
-	nums = [PolynomialSeries(
-					Sym.expand(Sym.substitute(f[1], Dict(x .=> (1 + s).^lambda))), s) 
-					for f in funcs]
-	denoms = [PolynomialSeries(
-					Sym.substitute(f[2], Dict(x .=> (1 + s).^lambda)), s) 
-					for f in funcs]
-	
-	factors = [BinomialSeries(e) for e in vertices * lambda]
-	
-	degrees = []
-	new_denoms = []
-	for d in denoms
-		for i in Iterators.countfrom(0)
-			if Sym.value(get_coeff(d, i)) != 0
-				push!(degrees, i)
-				push!(new_denoms, d << i)
-				break
-			end
-		end
-	end
-
-	quotients = (nums .* factors) ./ new_denoms
-
-	return sum(get_coeff(quotients[i], degrees[i]) for i in 1:length(quotients))
-end
-
 # ╔═╡ 6368417b-1ac3-4400-84f9-f602ace3516f
-function get_pseudo_cubical_cone(r)
+function get_pseudo_cubical_cone(R)
+	n = size(R, 1)
 	inequalities = []
-	for J in powerset(1:size(r, 1), 1)
-		r_ = r[J, :]
-		A = r_' * inv(r_ * r_')
-		for i in 1:length(J)
-			y = A[:, i]' * A
-			ineq = zeros(Rational, size(r, 1))
-			ineq[J] = y
+	push!(inequalities, Matrix{Rational}(I, n, n))
+	# We need each facet of the polytope to be a hypercube
+	# so the orthogonal projection of the vertex on each cone must lie in its
+	# relative interior
+	for I in powerset(1:n, 1, n-1)
+		# projection matrix onto subspace generated by facet I
+		# For any w in the span, with Rw = h, we have w = Ah
+		A = R[I, :]' * inv(R[I, :] * R[I, :]')
+		for j in setdiff(1:n, I)
+			# These inequalities come from Proposition 3.1, which essentially state that w_I belongs to the polytope cut out by the half-planes
+			# The original inequality is r_j * w_I <= h_j for all j not in I
+			# We have w_I = A_I * h_I and here we also take the transpose since we work with rows
+			ineq = zeros(Rational, n)
+			ineq[j] = 1
+			ineq[I] = -A' * R[j, :]
 			push!(inequalities, ineq)
 		end
 	end
@@ -589,108 +273,63 @@ function get_pseudo_cubical_cone(r)
 end
 
 # ╔═╡ e0a016c3-a3f1-49a4-aadd-20c018835547
-function cone_ehr(B, r, vars)
-    pseudo_cubical = get_pseudo_cubical_cone(r)
-	
-	h_pc = Vector{Rational}(pseudo_cubical.REL_INT_POINT)
-	verts_pc = get_ws(r, h_pc) * B
-	
+function cone_ehr(B::AbstractMatrix{Rational{T}}, R::AbstractMatrix{Rational{T}}, vars, h_pc) where T <: Integer
+
+	verts_pc = get_ws(R, h_pc) .|> w -> Vector{Rational{T}}(B' * w)
 	cones = get_hypercube_cones(verts_pc)
-	
-    verts = get_ws(r, vars) * B
-	return compute_lattice_count(verts, cones)
-end
+    verts = get_ws(R, vars) .|> w -> Vector(B' * w)
 
-# ╔═╡ 4f838718-c2db-4efb-8ad9-95af179e774f
-cone_ehr(I, Rational[1 0 0; 1 2 0; 0 1 3], Sym.variables(:h, 1:3))
-
-# ╔═╡ 9584573e-e2fb-44f0-b843-c4a8b1183e7e
-function standard_poly_form(f, var)
-	dict = Sym.polynomial_coeffs(f, [var])[1]
-	result = 0
-	for k in keys(dict)
-		result += k * dict[k]
-	end
-	return result
-end
-
-# ╔═╡ 36721cd7-608f-4ba6-9e4c-096f913cb882
-function cone_ehr_(B, r, vars)    
-    cone = polytope.Cone(INPUT_RAYS=r)
-    dual_cone = polytope.polarize(cone)
-	# We want the outer corner to project positively on each ray,
-	# so that the polyhedron is well-defined.
-    pseudo_cubical = polytope.intersection(cone, dual_cone)
-	pc_rays = Matrix{Rational}(pseudo_cubical.RAYS)
-	# Rescale each ray generator by gcd to get primitive ray generators
-	pc_rays = pc_rays .// reduce(gcd, pc_rays; init=0//1, dims=2)
-	# Extract a basis, which will help us sample independent values
-    pc_basis = extract_basis(pc_rays)
-
-	# Dimension of the cone (should be the same as the number of rays in r)
-	dim = size(pc_basis, 1)
-	# Samples of outer corner in the interior of the cone
-	samples = monomials_iter(dim, length(vars)) .|> m ->  pc_basis' * (m .+ 1)
-	# Corresponding h values giving rise to these points
-	h_values = samples .|> p -> r * p
-	# Calculate all the corners for each h
-	ws = h_values .|> h -> get_ws(r, h) * B
-	# Want to assure all of these points are lattice points, so scale everything by common denominator
-	denoms = ws .|> w -> reduce(lcm, denominator.(w); init =BigInt(1), dims=1)
-	denom = lcm((Iterators.flatten(ws) .|> denominator)...)
-	h_values_scaled = map(h -> denom * h, h_values)
-	# Calculate lattice counts for selected samples
-	#lattice_counts = h_values .|> h -> cone_lattice_count(B, r, denom*h)
-	lattice_counts = compute_lattice_counts_parallel(B, r, h_values_scaled)
-	# Interpolate the samples with a polynomial of expected degree
-	f = interpolate_polynomial(h_values_scaled, lattice_counts, vars, dim)
-	
-    return f#, ws, denoms, denom, h_values_scaled, lattice_counts, (h_values_scaled .|> h -> get_ws(r, h) * B)
+	return compute_lattice_count(cones, verts)
 end
 
 # ╔═╡ 845a0f6b-6628-4ee6-a89b-0b6ec31b6187
-function compute_polynomials(M, B=I)	
+function compute_polynomials(M; B=I)	
 	cones = chains(M)
 	polynomials = Dict()
-	
-    for (i, cone) in enumerate(cones)
+
+	pseudocubical_values = Dict()
+
+	for cone in cones
+		R = reduce(hcat, [B * get_ray_gen(M, F) for F in cone])'
+		pseudo_cubical = get_pseudo_cubical_cone(R)
+		h_pc = Vector{Rational}(pseudo_cubical.REL_INT_POINT)
+		pseudocubical_values[cone] = h_pc
+	end
+
+	for i in 1:length(cones)
+		cone = cones[i]
 		r = reduce(hcat, [B * get_ray_gen(M, F) for F in cone])'
 		vars = Sym.variables(:h, cone)
-		for k in 1:2^length(cone)-1
-			J = [(k >> i) % 2 == 1 for i in 0:length(cone)-1]
+		for J in powerset(1:length(cone), 1)
 			subcone = cone[J]
 			subcone_r = r[J, :]
 			subcone_vars = vars[J]
 
-			f = cone_ehr(r', subcone_r, subcone_vars)
+			f = cone_ehr(r', subcone_r, subcone_vars, pseudocubical_values[subcone])
 			polynomials[(cone, subcone)] = f
+			for J_ in powerset(J, 1)
+				subsubcone = cone[J_]
+				subsubcone_r = r[J_, :]
+				subsubcone_vars = vars[J_]
+
+				lat_basis = lattice_basis_inside_span(subcone_r * r')
+	
+				f = cone_ehr(r' * lat_basis', subsubcone_r, subsubcone_vars, pseudocubical_values[subsubcone])
+				polynomials[(cone, subcone, subsubcone)] = f
+			end
 		end
-		
-		write("progress", "$i/$(length(cones))")
     end
 	
     return polynomials
 end
 
-# ╔═╡ 52873363-960a-4cd1-9e70-ac7055f928d7
+# ╔═╡ 634a0421-25b5-4bb6-963f-916f310ab4ed
 x = Sym.variables(:x, 1:10)
 
-# ╔═╡ af4fecfe-ad6e-401f-bfd6-390fa091c26c
-Sym.polynomial_coeffs(x[1]^2 + x[1] - x[1]^3 + 1, [x[1]])
-
-# ╔═╡ b464faa3-4fe7-4eb9-920a-77f17b47d7c1
-PolynomialSeries(x[1]^2 + x[1] - x[1]^3 + 1, x[1])
-
-# ╔═╡ 7af65f65-fc55-47e7-868e-a2a96168b2e2
-Sym.polynomial_coeffs(x[1]^2, [x[1]])
-
-# ╔═╡ a1907a8c-81f5-4f27-a7f2-ffa34be9457d
-standard_poly_form(x[2]*(x[1] + 1) + 1 + (1 + x[1]^2)^2 * (x[3] - 1), x[1])
-
 # ╔═╡ 097e42ca-56ed-4a03-8ba8-0d8faafa849d
-function ehrhart_polynomial(M, polynomials=nothing)
+function ehrhart_polynomial(M; B=I, polynomials=nothing)
 	if polynomials == nothing
-		polynomials = compute_polynomials(M)
+		polynomials = compute_polynomials(M; B=B)
 	end
 	
     n = length(nonempty_proper_flats(M))
@@ -713,10 +352,12 @@ function ehrhart_polynomial(M, polynomials=nothing)
 	
 				for k in (1:3)[J]
 					ray = cone[k:k]
-					result += 1//6 * (polynomials[(cone, ray)] + polynomials[(subcone, ray)] + polynomials[(ray, ray)])
+					#result += 1//6 * (polynomials[(cone, ray)] + polynomials[(subcone, ray)] + polynomials[(ray, ray)])
+					#result += x[1] * (polynomials[(cone, subcone, ray)])
+					result += 1//6 * polynomials[(subcone, ray)]
 				end
 	
-				#result += x[4] * polynomials[(cone, cone[j:j])]
+				result += 1//3 *(polynomials[(cone, cone[j:j])] + polynomials[(cone[j:j], cone[j:j])])
 			end
 			result -= 1
 	
@@ -746,206 +387,253 @@ function ehrhart_polynomial(M, polynomials=nothing)
     return ehr
 end
 
-# ╔═╡ 5393fae8-ee75-4647-9205-56faeb53b176
+# ╔═╡ f7f4ca84-bf8f-4962-a898-b92412db4bdd
 # ╠═╡ disabled = true
 #=╠═╡
-fano = Matroid(matroid.fano_matroid())
-  ╠═╡ =#
-
-# ╔═╡ 078c01ce-886d-4e14-89fa-d201affd8ff0
-#=╠═╡
-chains(fano)
-  ╠═╡ =#
-
-# ╔═╡ 7f55c842-2e3f-4764-be9a-9c510626d362
-#=╠═╡
-fano_snap = snapper_polynomial(fano)
-  ╠═╡ =#
-
-# ╔═╡ a5206183-58a5-430e-89b9-1e7e87d623c5
-#=╠═╡
-fano_polynomials = compute_polynomials(fano)
-  ╠═╡ =#
-
-# ╔═╡ bb25f4cc-ff1f-4f67-990e-530e0a369b2f
-# ╠═╡ disabled = true
-#=╠═╡
-Symbolics.expand(Symbolics.substitute(fano_snap, f_to_h(fano)) - ehrhart_polynomial(fano, fano_polynomials))
-  ╠═╡ =#
-
-# ╔═╡ a2ddce7c-22ab-4b22-a46a-188c123bed82
-# ╠═╡ disabled = true
-#=╠═╡
-r = Rational[1 0 1 1; 0 1 0 1]
-  ╠═╡ =#
-
-# ╔═╡ be10a598-918c-4bec-af4d-017e9522e948
-#=╠═╡
-@time cone_ehr(r', r, Symbolics.variables(:x, 1:2))
-  ╠═╡ =#
-
-# ╔═╡ 26172237-30a0-46e8-a825-b9ab3ebd112f
 M = Matroid(matroid.matroid_from_graph(graph.graph_from_edges([[0, 1], [1, 2], [0, 2], [1, 3], [2, 3], [3, 4], [1, 4]])))
+  ╠═╡ =#
 
-# ╔═╡ 6fdd1ad0-3fa3-41eb-8e6c-a11f63db2fdc
+# ╔═╡ 5c91579c-34a0-448a-b5b4-08d95693ac10
+#=╠═╡
 svg_visual(M)
-
-# ╔═╡ 5fbbb173-fe2c-4538-aa4e-379396331c05
-M_polynomials = remember("M_polynomials", compute_polynomials, M);
-
-# ╔═╡ d444f5c6-8686-4ab6-ac31-7e9f90ac9d35
-M_ehrhart = ehrhart_polynomial(M, M_polynomials);
-
-# ╔═╡ f6254849-8c30-49e4-a736-0b10577b46f0
-M_snap = remember("M_snap2", snapper_polynomial, M);
-
-# ╔═╡ b403367b-93a8-4a73-bd13-48b372d23a52
-M_ehrhart_true = remember("M_ehrhart_true", () ->
-	Symbolics.expand(Symbolics.substitute(M_snap, f_to_h(M))));
-
-# ╔═╡ 5ac3cc96-7e85-45a9-972d-b7fb1bc4a3bf
-M_ehrhart - M_ehrhart_true
-
-# ╔═╡ 82b0d9ec-ffe8-4491-b707-5379fee808c4
-#=╠═╡
-chains(M)
   ╠═╡ =#
 
-# ╔═╡ 300cdd94-3f84-4240-bd1c-6fa21d252664
-U = Matroid(matroid.uniform_matroid(4,5));
-
-# ╔═╡ 475bd32e-2eba-4a44-9d21-c7ae214a3438
+# ╔═╡ 0bddbbd1-efa4-4d4e-9cb9-33ef6f83aae5
 #=╠═╡
-svg_visual(U)
+M.flats
   ╠═╡ =#
 
-# ╔═╡ ecc9e495-347f-479c-94a6-3578c63f0eae
+# ╔═╡ d65b475d-79f7-4227-a33c-045f83b3e5d0
 #=╠═╡
-U.flats
+[(F, M.flats[F], get_ray_gen(M, F)) for F in nonempty_flats(M)]
   ╠═╡ =#
 
-# ╔═╡ de72a522-9c20-4f27-a4b6-ea86cdef68cf
-function random_GL(n)
-	A = Matrix{Rational}(I, n, n)
-	k = rand(1:100)
-	for i in 1:k
-		p = randperm(n)
-		E = Matrix{Rational}(I, n, n)
-		if rand(Bool)
-			Base.permutecols!!(E, p)
-		else
-			E[p[1], p[2]] += -1 * rand(Bool)
-		end
-		A = A*E
-	end
-	return A
+# ╔═╡ a06ec159-edaf-441e-92ae-ebe60330bbb4
+#=╠═╡
+polynomials = compute_polynomials(M)
+  ╠═╡ =#
+
+# ╔═╡ 8436dbb4-cbde-428b-a1e1-ca0c19270ab5
+#=╠═╡
+snap = snapper_polynomial(M);
+  ╠═╡ =#
+
+# ╔═╡ d8b1d015-016c-4a43-a85f-43c113f1c2f9
+#=╠═╡
+snap_h = Sym.expand(Sym.substitute(snap, f_to_h(M)));
+  ╠═╡ =#
+
+# ╔═╡ 37b7624b-f0d1-434f-83c6-1dbff3265525
+#=╠═╡
+p = snap_h - ehrhart_polynomial(M; polynomials=polynomials)
+  ╠═╡ =#
+
+# ╔═╡ 89e3aa92-021f-4a9e-8c5a-e17c01d51e0c
+#=╠═╡
+a = [Sym.coeff(p, Sym.variable(:h, i)) for i in 2:26]
+  ╠═╡ =#
+
+# ╔═╡ 1b3f732b-e2e1-409d-95b6-927a70936a78
+#=╠═╡
+collect(zip(a, [get_ray_gen(M, F) for F in 2:26], M.flats[2:26]))[a .!= 0]
+  ╠═╡ =#
+
+# ╔═╡ ba6c595e-0b6e-4076-a072-94fb4e80598b
+function simplex_signed_volume(R)
+	return det(R) / factorial(size(R, 1))
 end
 
-# ╔═╡ 1b20a227-d07a-4a3d-9a0a-703b3ced4177
-U_polynomials = remember("U_polynomials", compute_polynomials, U);
+# ╔═╡ 2f24f384-eddc-4a64-a4e8-091f50210aee
+function hypercube_volume(verts)
+	n = Int(log2(length(verts)))
+	vol = 0
+	for flag in permutations(1:n)
+		edges = []
+		for i in 1:n
+			vert_index = sum(1 .<< (flag[1:i] .- 1)) + 1
+			push!(edges, verts[vert_index] - verts[1])
+		end
+		R = reduce(hcat, edges)'
+		sgn = 1
+		for i in 1:n
+			for j in i+1:n
+				if flag[i] > flag[j]
+					sgn *= -1
+				end
+			end
+		end
+		vol += sgn * simplex_signed_volume(R)
+	end
+	return vol
+end
 
-# ╔═╡ ab319d11-b4c0-4559-bf53-75c4297bf3b5
-U_polynomials2 = remember("U_polynomials2", compute_polynomials, U);
+# ╔═╡ 66306ed4-dbff-4641-a6ca-9ab7ab7fb5b4
+function cone_volume_polynomial(R, vars)
+    verts = get_ws(R, vars) .|> w -> Vector(R * w)
+	sgn = sign(det(R * R'))
 
-# ╔═╡ 2074cd20-8e28-481c-aaa0-24bdbb1bd41d
-A = BigInt[1 0 0 0; 2 1 0 0; 1 0 1 0; 0 3 2 1]
+	return sgn * hypercube_volume(verts)
+end
 
-# ╔═╡ f25b25e5-42ee-4f03-9ba8-2f756a74569d
-# ╠═╡ disabled = true
+# ╔═╡ 3526c412-82e6-42b8-ae07-7e6605b84b64
+function volume_polynomial(M)
+    n = length(nonempty_proper_flats(M))
+
+	dim = maximum(length.(chains(M)))
+	cones = filter(c -> length(c) == dim, chains(M))
+		
+    vol = 0
+	for cone in cones
+		R = reduce(hcat, [get_ray_gen(M, F) for F in cone])'
+		vars = Sym.variables(:h, cone)
+
+		vol += cone_volume_polynomial(R, vars)
+	end
+	return Sym.expand(vol)
+end
+
+# ╔═╡ 0f398106-1db4-491c-8ed2-24978cf9cc21
+hypercube_volume(Vector{Rational}[[0, 0, 0], [1, 0,0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]])
+
+# ╔═╡ 63910e9a-8c8c-4144-b6ca-ca15dc59bbde
+hypercube_volume(Vector{Rational}[[0, 0], [1, 0], [0, 1], [2, 1]])
+
+# ╔═╡ 464c9484-8dc0-4d36-beb2-54abdcdf329e
+F = Matroid(matroid.fano_matroid())
+
+# ╔═╡ be7e8e24-bc14-45c0-99fb-4c0b32797e9d
+function falling_factorial(x, n::Int)
+    if n < 0
+        error("Falling factorial exponent must be non-negative.")
+    elseif n == 0
+        return 1
+    elseif n == 1
+        return x
+    else
+        term = x
+        for i in 1:(n-1)
+            term *= (x - i)
+        end
+        return term
+    end
+end
+
+# ╔═╡ a1ef391c-65e5-4188-9dc8-759ffc9182ed
+function pochhammer(expr, vars)
+	coeffs = Sym.polynomial_coeffs(expr, vars)[1]
+	result = 0
+	for (monom, coeff) in coeffs
+		poch_monom = 1
+		for var in vars
+			poch_monom *= falling_factorial(var, Sym.degree(monom, var))
+		end
+		result += coeff * poch_monom
+	end
+	return result
+end
+
+# ╔═╡ fb6c5e16-11fd-414e-8347-64dc12de97b7
+
+
+# ╔═╡ e9b461a5-231f-4776-ad44-9344a8bb182c
+P = Matroid(matroid.uniform_matroid(4,4))
+
+# ╔═╡ 2e6ca780-e780-46cc-8d15-f8504ea63dc9
+g = Sym.variables(:g, 1:15)
+
+# ╔═╡ d05c8cc6-95c1-4707-a483-91f412dcb368
+sym_dict = Dict(Sym.variables(:h, 2:15) .=> [g[1], g[1], g[1], g[1], g[2], g[2], g[2], g[2], g[2], g[2], g[3], g[3], g[3], g[3]])
+
+# ╔═╡ 0f846dbf-194e-4052-a148-ad93fe93a7ce
+volume_polynomial(P)
+
+# ╔═╡ 6ffc1041-21db-4030-88fc-82d35ceb5584
+f = Sym.expand(Sym.substitute(volume_polynomial(P), sym_dict))
+
+# ╔═╡ 9463d81b-f700-4560-a12f-488cbc323867
+Sym.polynomial_coeffs(f, Sym.variables(:h, 2:15))
+
+# ╔═╡ 0665a407-0de6-40b0-b312-cdb09a76fc3a
+f_poch = Sym.expand(pochhammer(f, Sym.variables(:g, 1:3)))
+
+# ╔═╡ 6eb16052-ee49-44fd-921b-90a0b47db1d7
+h = f_poch - f
+
+# ╔═╡ 1b5990cf-17ab-4676-b63e-0317602738f6
+df = [Sym.derivative(f, Sym.variable(:g, i)) for i in 1:3]
+
+# ╔═╡ e4dbe57f-062b-4ea5-a8c7-443c3e54491b
+Sym.expand(sum(df .* [-1, -0, -1]))
+
+# ╔═╡ 94195c83-7a5d-4cec-ad1d-4a2cae1e4006
+res = Sym.expand(h - sum(df .* [1//2, 0, 1//2]))
+
+# ╔═╡ 748443e6-d85f-46cb-b7d7-83a942e8e841
+sqs2 = [Sym.coeff(Sym.expand(g - sum(df .* Sym.variables(:a, 2:15))), Sym.variable(:h, i)*Sym.variable(:h, 2)) for i in 2:15]
+
+# ╔═╡ a36264ce-ca20-4008-afd1-e849b680596b
+Sym.symbolic_solve(sqs2 .~ 0, Sym.variables(:a, [2, 6,7,8, 12, 13, 14]))
+
+# ╔═╡ 253b9439-e316-4185-b9d2-3223ec733872
+sqs = vcat([Sym.coeff(Sym.expand(h - sum(df .* Sym.variables(:a, 1:3))), Sym.variable(:g, i)* Sym.variable(:g, j)) for i in 1:3 for j in 1:3]
+)
+
+# ╔═╡ e5c106d6-0002-46d2-9ff6-d21bc0adfc7d
+eqs = [exp ~ 0 for exp in sqs if !Sym._iszero(exp)]
+
+# ╔═╡ 5a05e709-c932-4fab-8000-848374f96b4b
+function <ₑ(a::Sym.Num, b::Rational{BigInt})
+    return Sym.substitute(Sym.symless_lt(a.val, b))
+end
+
+# ╔═╡ 2eac58c8-5c22-4426-af72-06f81c11ba5c
+Sym.symbolic_solve(eqs[1:3], Sym.variables(:a, 1:3))
+
+# ╔═╡ 82407c48-4256-4ea2-ac1f-accbc99c7b42
+A = hcat([[Sym.coeff(a, Sym.variable(:a, i)) for i in 2:15] for a in sqs]...)
+
+# ╔═╡ b908088e-324c-42a0-b019-150eec489d5b
+A * A'
+
+# ╔═╡ eb0939cc-dcc0-49e0-b964-134bbfac24cd
 #=╠═╡
-r = [get_ray_gen(U, 4) get_ray_gen(U, 8) get_ray_gen(U, 17)]' * A'
+vol_M = volume_polynomial(M)
   ╠═╡ =#
 
-# ╔═╡ 4b986231-8c14-40fe-9934-18089e11bc76
-# ╠═╡ disabled = true
+# ╔═╡ 53bdbe99-d1b0-460f-b116-d8d480e6f938
 #=╠═╡
-U_polynomials2 = @remember("U_polynomials2", compute_polynomials(U, A))
+diff = vol_M - snap_h
   ╠═╡ =#
 
-# ╔═╡ a242f773-e719-4401-afed-90669b4442f8
+# ╔═╡ f59dfc1a-71bc-48f0-982c-c7a2a984a8e0
 #=╠═╡
-filter(p->Symbolics.coeff(p.second, 1) != 1, U_polynomials2)
+fs = [Sym.coeff(diff, Sym.variable(:h, i)) for i in 1:34]
   ╠═╡ =#
 
-# ╔═╡ c3d0d178-6228-47af-a470-24a117e149b7
-U_ehrhart = ehrhart_polynomial(U, U_polynomials);
-
-# ╔═╡ bca104b9-852b-46ce-8ce8-dadd6d45d418
-U_ehrhart2 = ehrhart_polynomial(U, U_polynomials2);
-
-# ╔═╡ 18273213-efb2-4e64-9651-5983780e0e09
-U_snap = remember("U_snap", snapper_polynomial, U);
-
-# ╔═╡ 6e4a6519-aa95-42dc-941e-41ef445c6c6a
-U_ehrhart_true = remember("U_ehrhart_true", () ->
-	Symbolics.expand(Symbolics.substitute(U_snap, f_to_h(U))));
-
-# ╔═╡ c9c6d515-5e92-48fe-a990-15c6e85d4e28
-f = U_ehrhart_true - U_ehrhart
-
-# ╔═╡ 254166fa-2fa6-4fad-b3fb-57d8d9100eee
+# ╔═╡ a0a43e95-9d74-458f-a8af-49f0a4138245
 #=╠═╡
-hs = Symbolics.variables(:h, nonempty_proper_flats(M));
+b = reduce(hcat, [[Sym.coeff(f, Sym.variable(:x, j)) for j in 1:3] for f in fs])
   ╠═╡ =#
 
-# ╔═╡ 3b58ab04-48a6-4da8-87f7-6df41b0c3e6c
+# ╔═╡ 97c74a06-c53e-444c-bdd8-4335e2cb5826
 #=╠═╡
-monomials = Set([hs [h1 * h2 for (h1, h2) in Iterators.product(hs, hs)]]);
+y = [Sym.coeff(a, 1) for a in sqs]
   ╠═╡ =#
 
-# ╔═╡ 80967c37-7227-45e6-ae49-48cc5053c8a5
+# ╔═╡ 2217761d-f38b-4e79-8874-c3c679b622ed
 #=╠═╡
-gs = [Symbolics.substitute(Symbolics.coeff(f, m), Dict(hs .=> 0)) for m in monomials]
-  ╠═╡ =#
-
-# ╔═╡ 1596e4d3-fd60-4ba4-852e-24486ba3df0a
-#=╠═╡
-gs[5] - gs[6]
-  ╠═╡ =#
-
-# ╔═╡ 86cc36e2-1766-4a63-9b8b-92ec2b589ebb
-#=╠═╡
-gs[15] - gs[16]
-  ╠═╡ =#
-
-# ╔═╡ 3bcdc4cc-5b49-4617-a362-adfeda9ae1c5
-# ╠═╡ disabled = true
-#=╠═╡
-U34 = Matroid(matroid.uniform_matroid(3, 4))
-  ╠═╡ =#
-
-# ╔═╡ 3952d683-6446-445d-8b02-3922a9125d35
-#=╠═╡
-r = reduce(hcat, [get_ray_gen(U34, F) for F in nonempty_proper_flats(U34)])'
-  ╠═╡ =#
-
-# ╔═╡ baa2348f-4be2-4acf-861b-325601dd62bf
-#=╠═╡
-U34_polyns = compute_polynomials(U34)
-  ╠═╡ =#
-
-# ╔═╡ 48b4e6ce-a283-4f0b-92fe-4c0ded6571dd
-#=╠═╡
-ehrhart_polynomial(U34, U34_polyns)
-  ╠═╡ =#
-
-# ╔═╡ 0781d38c-6eb2-48ca-afdf-bc520034eea6
-#=╠═╡
-U34_snapper = snapper_polynomial(U34)
-  ╠═╡ =#
-
-# ╔═╡ 93f2a35d-01da-411e-9563-53e40d83084d
-#=╠═╡
-U34_ehr_true = Symbolics.expand(Symbolics.substitute(U34_snapper, f_to_h(U34)))
+y = [Sym.coeff(f, 1) for f in fs]
   ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Polymake = "d720cf60-89b5-51f5-aff5-213f193123e7"
+SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 SimplePlutoInclude = "6f00a2c5-ea4a-46bf-9183-91b7b57a087f"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
@@ -953,10 +641,11 @@ XML = "72c71f33-b9b6-44de-8c94-c961784809e2"
 
 [compat]
 Combinatorics = "~1.0.2"
-Latexify = "~0.16.5"
-Polymake = "~0.11.24"
+DataStructures = "~0.18.20"
+Latexify = "~0.16.6"
+Polymake = "~0.11.25"
 SimplePlutoInclude = "~0.2.0"
-Symbolics = "~6.24.0"
+Symbolics = "~6.29.1"
 XML = "~0.3.4"
 """
 
@@ -966,12 +655,12 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "ea18a530e31224b48470d0764ba6250f54ade283"
+project_hash = "c9393c9c0dc27546ca7b88a26cd4f74b948fa9f3"
 
 [[deps.ADTypes]]
-git-tree-sha1 = "ab3815fc06f9c171ee81277f00ecee19b47e0b91"
+git-tree-sha1 = "fb97701c117c8162e84dfcf80215caa904aef44f"
 uuid = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-version = "1.12.0"
+version = "1.13.0"
 
     [deps.ADTypes.extensions]
     ADTypesChainRulesCoreExt = "ChainRulesCore"
@@ -990,10 +679,14 @@ uuid = "ae81ac8f-d209-56e5-92de-9978fef736f9"
 version = "0.1.3+0"
 
 [[deps.AbstractAlgebra]]
-deps = ["LinearAlgebra", "MacroTools", "Preferences", "Random", "RandomExtensions", "SparseArrays", "Test"]
-git-tree-sha1 = "4d02060414d46e141e79efbd1484901c0fb4ce24"
+deps = ["LinearAlgebra", "MacroTools", "Preferences", "Random", "RandomExtensions", "SparseArrays"]
+git-tree-sha1 = "1c765891be37479d2ab6f4fe1faff30fea27fc2f"
 uuid = "c3fe647b-3220-5bb0-a1ea-a7954cac585d"
-version = "0.43.12"
+version = "0.44.8"
+weakdeps = ["Requires", "Test"]
+
+    [deps.AbstractAlgebra.extensions]
+    TestExt = "Test"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
@@ -1002,9 +695,9 @@ version = "0.4.5"
 
 [[deps.Accessors]]
 deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "MacroTools"]
-git-tree-sha1 = "0ba8f4c1f06707985ffb4804fdad1bf97b233897"
+git-tree-sha1 = "3b86719127f50670efe356bc11073d84b4ed7a5d"
 uuid = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
-version = "0.1.41"
+version = "0.1.42"
 
     [deps.Accessors.extensions]
     AxisKeysExt = "AxisKeys"
@@ -1019,7 +712,6 @@ version = "0.1.41"
     AxisKeys = "94b1ba4f-4ee9-5380-92f1-94cde586c3c5"
     IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
     LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-    Requires = "ae029012-a4dd-5104-9daa-d747884805df"
     StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
     StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
     Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -1027,12 +719,13 @@ version = "0.1.41"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "50c3c56a52972d78e8be9fd135bfb91c9574c140"
+git-tree-sha1 = "cd8b948862abee8f3d3e9b73a102a9ca924debb0"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "4.1.1"
-weakdeps = ["StaticArrays"]
+version = "4.2.0"
+weakdeps = ["SparseArrays", "StaticArrays"]
 
     [deps.Adapt.extensions]
+    AdaptSparseArraysExt = "SparseArrays"
     AdaptStaticArraysExt = "StaticArrays"
 
 [[deps.AliasTables]]
@@ -1097,10 +790,10 @@ uuid = "f01c122e-0ea1-4f85-ad8f-907073ad7a9f"
 version = "0.1.3"
 
 [[deps.Bzip2_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "8873e196c2eb87962a2048b3b8e08946535864a1"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "1b96ea4a01afe0ea4090c5c8039690672dd13f2e"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+4"
+version = "1.0.9+0"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra"]
@@ -1169,9 +862,9 @@ weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
 
 [[deps.CxxWrap]]
 deps = ["Libdl", "MacroTools", "libcxxwrap_julia_jll"]
-git-tree-sha1 = "9208ab6d13777dace5981b451171891faf59e6a2"
+git-tree-sha1 = "12349409599af22cfe0a7675857d969fe71b7767"
 uuid = "1f15a43c-97ca-5a2a-ae31-89f07a497df4"
-version = "0.16.0"
+version = "0.16.1"
 
 [[deps.DataAPI]]
 git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
@@ -1196,9 +889,9 @@ version = "1.11.0"
 
 [[deps.DecFP]]
 deps = ["DecFP_jll", "Printf", "Random", "SpecialFunctions"]
-git-tree-sha1 = "4a10cec664e26d9d63597daf9e62147e79d636e3"
+git-tree-sha1 = "88e521a871a1b11488a1f48b8c085b4be8f71be5"
 uuid = "55939f99-70c6-5e9b-8bb0-5071ed7d61fd"
-version = "1.3.2"
+version = "1.4.1"
 
 [[deps.DecFP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1272,11 +965,10 @@ git-tree-sha1 = "27415f162e6028e81c72b82ef756bf321213b6ec"
 uuid = "e2ba6199-217a-4e67-a87a-7c52f15ade04"
 version = "0.1.10"
 
-[[deps.Expronicon]]
-deps = ["MLStyle", "Pkg", "TOML"]
-git-tree-sha1 = "fc3951d4d398b5515f91d7fe5d45fc31dccb3c9b"
-uuid = "6b7a57c9-7cc1-4fdf-b7f5-e857abae3636"
-version = "0.8.5"
+[[deps.ExproniconLite]]
+git-tree-sha1 = "c13f0b150373771b0fdc1713c97860f8df12e6c2"
+uuid = "55351af7-c7e9-48d6-89ff-24e801d99491"
+version = "0.10.14"
 
 [[deps.FLINT_jll]]
 deps = ["Artifacts", "GMP_jll", "JLLWrappers", "Libdl", "MPFR_jll", "OpenBLAS32_jll"]
@@ -1340,9 +1032,9 @@ version = "0.2.0"
 
 [[deps.Hwloc_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "50aedf345a709ab75872f80a2779568dc0bb461b"
+git-tree-sha1 = "f93a9ce66cd89c9ba7a4695a47fd93b4c6bc59fa"
 uuid = "e33a78d0-f292-5ffc-b300-72abe9b543c8"
-version = "2.11.2+3"
+version = "2.12.0+0"
 
 [[deps.HypergeometricFunctions]]
 deps = ["LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
@@ -1393,9 +1085,9 @@ uuid = "9cc047cb-c261-5740-88fc-0cf96f7bdcc7"
 version = "300.1400.1700+0"
 
 [[deps.IrrationalConstants]]
-git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
+git-tree-sha1 = "e2222959fbc6c19554dc15174c81bf7bf3aa691c"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
-version = "0.2.2"
+version = "0.2.4"
 
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -1414,17 +1106,17 @@ git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 version = "0.21.4"
 
+[[deps.Jieko]]
+deps = ["ExproniconLite"]
+git-tree-sha1 = "2f05ed29618da60c06a87e9c033982d4f71d0b6c"
+uuid = "ae98c720-c025-4a4a-838c-29b094483192"
+version = "0.2.1"
+
 [[deps.LLVMOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "78211fb6cbc872f77cad3fc0b6cf647d923f4929"
 uuid = "1d63c593-3942-5779-bab2-d838dc0a180e"
 version = "18.1.7+0"
-
-[[deps.LZO_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "1c602b1127f4751facb671441ca72715cc95938a"
-uuid = "dd4b983a-f0e5-5f8d-a1b7-129d4a5fb1ac"
-version = "2.10.3+0"
 
 [[deps.LaTeXStrings]]
 git-tree-sha1 = "dda21b8cbd6a6c40d9d02a73230f9d70fed6918c"
@@ -1433,9 +1125,9 @@ version = "1.4.0"
 
 [[deps.Latexify]]
 deps = ["Format", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Requires"]
-git-tree-sha1 = "ce5f5621cac23a86011836badfedf664a612cee4"
+git-tree-sha1 = "cd714447457c660382fe634710fb56eb255ee42e"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.16.5"
+version = "0.16.6"
 
     [deps.Latexify.extensions]
     DataFramesExt = "DataFrames"
@@ -1501,22 +1193,11 @@ version = "0.3.29"
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 version = "1.11.0"
 
-[[deps.Lz4_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "191686b1ac1ea9c89fc52e996ad15d1d241d1e33"
-uuid = "5ced341a-0733-55b8-9ab6-a4889d929147"
-version = "1.10.1+0"
-
 [[deps.METIS_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "2eefa8baa858871ae7770c98c3c2a7e46daba5b4"
 uuid = "d00139f3-1899-568f-a2f0-47f597d42d70"
 version = "5.1.3+0"
-
-[[deps.MLStyle]]
-git-tree-sha1 = "bc38dff0548128765760c79eb7388a4b37fae2c8"
-uuid = "d8e11817-5142-5d16-987a-aa16d5891078"
-version = "0.4.17"
 
 [[deps.MPFR_jll]]
 deps = ["Artifacts", "GMP_jll", "Libdl"]
@@ -1566,6 +1247,12 @@ git-tree-sha1 = "9b0ee6f5843a8df838d76794a5d50e77b8a3b08f"
 uuid = "4fe8b98c-fc19-5c23-8ec2-168ff83495f2"
 version = "0.9.2"
 
+[[deps.Moshi]]
+deps = ["ExproniconLite", "Jieko"]
+git-tree-sha1 = "453de0fc2be3d11b9b93ca4d0fddd91196dcf1ed"
+uuid = "2e0e35c7-a2e4-4343-998d-7ef72827ed2d"
+version = "0.3.5"
+
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2023.12.12"
@@ -1578,21 +1265,21 @@ version = "0.5.7"
 
 [[deps.MutableArithmetics]]
 deps = ["LinearAlgebra", "SparseArrays", "Test"]
-git-tree-sha1 = "43122df26d27424b23577d59e2d8020f28386516"
+git-tree-sha1 = "491bdcdc943fcbc4c005900d7463c9f216aabf4c"
 uuid = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
-version = "1.6.2"
+version = "1.6.4"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
-git-tree-sha1 = "fe891aea7ccd23897520db7f16931212454e277e"
+git-tree-sha1 = "cc0a5deefdb12ab3a096f00a6d42133af4560d71"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.Ncurses_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "3690e6c58c16ba676bcc9b5654762fe8a05db1c7"
+git-tree-sha1 = "b5e7e7ad16adfe5f68530f9f641955b5b0f12bbb"
 uuid = "68e3532b-a499-55ff-9963-d1c0c0748b3a"
-version = "6.5.0+1"
+version = "6.5.1+0"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -1631,9 +1318,9 @@ version = "0.8.1+2"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "7493f61f55a6cce7325f197443aa80d32554ba10"
+git-tree-sha1 = "a9697f1d06cc3eb3fb3ad49cc67f2cfabaac31ea"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.15+3"
+version = "3.0.16+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -1642,9 +1329,9 @@ uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.6+0"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "12f1439c4f986bb868acda6ea33ebc78e19b95ad"
+git-tree-sha1 = "cc4054e898b852042d7b503313f7ad03de99c3dd"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.7.0"
+version = "1.8.0"
 
 [[deps.PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
@@ -1687,9 +1374,9 @@ weakdeps = ["REPL"]
 
 [[deps.Polymake]]
 deps = ["AbstractAlgebra", "BinaryWrappers", "CxxWrap", "Downloads", "JSON", "Libdl", "Mongoc", "NetworkOptions", "Ninja_jll", "Perl_jll", "Pidfile", "Pkg", "REPL", "Scratch", "SparseArrays", "TOPCOM_jll", "lib4ti2_jll", "libpolymake_julia_jll", "polymake_jll", "polymake_oscarnumber_jll"]
-git-tree-sha1 = "0a606d37843442f11b972046610eb94216b6089c"
+git-tree-sha1 = "5addbf9d589c4d052ec0aef4bd5cc7e886d12c00"
 uuid = "d720cf60-89b5-51f5-aff5-213f193123e7"
-version = "0.11.24"
+version = "0.11.25"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -1721,9 +1408,9 @@ version = "1.3.0"
 
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
-git-tree-sha1 = "cda3b045cf9ef07a08ad46731f5a3165e56cf3da"
+git-tree-sha1 = "9da16da70037ba9d701192e27befedefb91ec284"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
-version = "2.11.1"
+version = "2.11.2"
 
     [deps.QuadGK.extensions]
     QuadGKEnzymeExt = "Enzyme"
@@ -1749,9 +1436,9 @@ version = "0.4.4"
 
 [[deps.Readline_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ncurses_jll"]
-git-tree-sha1 = "69684dc9c2c69f7c515097841991362cca0739ea"
+git-tree-sha1 = "6044f482a91c7aa2b82ab614aedd726be633ad05"
 uuid = "05236dd9-4125-5232-aa7c-9ec0c9b2c25a"
-version = "8.2.1+1"
+version = "8.2.13+0"
 
 [[deps.RecipesBase]]
 deps = ["PrecompileTools"]
@@ -1761,9 +1448,9 @@ version = "1.3.4"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "32f824db4e5bab64e25a12b22483a30a6b813d08"
+git-tree-sha1 = "e96b644f7bfbf1015f8e42a7c7abfae2a48fafbf"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.27.4"
+version = "3.31.0"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
@@ -1794,9 +1481,9 @@ version = "1.2.2"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
-git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
+git-tree-sha1 = "62389eeff14780bfe55195b7204c0d8738436d64"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
-version = "1.3.0"
+version = "1.3.1"
 
 [[deps.Rmath]]
 deps = ["Random", "Rmath_jll"]
@@ -1833,13 +1520,14 @@ uuid = "319450e9-13b8-58e8-aa9f-8fd1420848ab"
 version = "2024.5.8+0"
 
 [[deps.SciMLBase]]
-deps = ["ADTypes", "Accessors", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "Expronicon", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "SciMLStructures", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface"]
-git-tree-sha1 = "80396dc3496a1718fc356797fa54034b6c533a18"
+deps = ["ADTypes", "Accessors", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "Moshi", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "SciMLStructures", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface"]
+git-tree-sha1 = "ee305515b0946db5f56af699e8b5804fee04146c"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.72.0"
+version = "2.75.1"
 
     [deps.SciMLBase.extensions]
     SciMLBaseChainRulesCoreExt = "ChainRulesCore"
+    SciMLBaseMLStyleExt = "MLStyle"
     SciMLBaseMakieExt = "Makie"
     SciMLBasePartialFunctionsExt = "PartialFunctions"
     SciMLBasePyCallExt = "PyCall"
@@ -1850,6 +1538,7 @@ version = "2.72.0"
     [deps.SciMLBase.weakdeps]
     ChainRules = "082447d4-558c-5d27-93f4-14fc19e9eca2"
     ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    MLStyle = "d8e11817-5142-5d16-987a-aa16d5891078"
     Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
     PartialFunctions = "570af359-4316-4cb7-8c74-252c00c2016b"
     PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
@@ -1886,9 +1575,9 @@ version = "1.11.0"
 
 [[deps.Setfield]]
 deps = ["ConstructionBase", "Future", "MacroTools", "StaticArraysCore"]
-git-tree-sha1 = "e2cc6d8c88613c05e1defb55170bf5ff211fbeac"
+git-tree-sha1 = "c5391c6ace3bc430ca630251d02ea9687169ca68"
 uuid = "efcf1570-3423-57d1-acb7-fd33fddbac46"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.SimplePlutoInclude]]
 deps = ["Dates"]
@@ -1923,9 +1612,9 @@ weakdeps = ["ChainRulesCore"]
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
-git-tree-sha1 = "47091a0340a675c738b1304b58161f3b0839d454"
+git-tree-sha1 = "e3be13f448a43610f978d29b7adf78c76022467a"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.9.10"
+version = "1.9.12"
 weakdeps = ["ChainRulesCore", "Statistics"]
 
     [deps.StaticArrays.extensions]
@@ -1985,9 +1674,9 @@ version = "7.7.0+0"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["Accessors", "ArrayInterface", "RuntimeGeneratedFunctions", "StaticArraysCore"]
-git-tree-sha1 = "fd2d4f0499f6bb4a0d9f5030f5c7d61eed385e03"
+git-tree-sha1 = "d6c04e26aa1c8f7d144e1a8c47f1c73d3013e289"
 uuid = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
-version = "0.3.37"
+version = "0.3.38"
 
 [[deps.SymbolicLimits]]
 deps = ["SymbolicUtils"]
@@ -1996,10 +1685,10 @@ uuid = "19f23fe9-fdab-4a78-91af-e7b7767979c3"
 version = "0.2.2"
 
 [[deps.SymbolicUtils]]
-deps = ["AbstractTrees", "ArrayInterface", "Bijections", "ChainRulesCore", "Combinatorics", "ConstructionBase", "DataStructures", "DocStringExtensions", "DynamicPolynomials", "IfElse", "LinearAlgebra", "MultivariatePolynomials", "NaNMath", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArrays", "SymbolicIndexingInterface", "TermInterface", "TimerOutputs", "Unityper", "WeakValueDicts"]
-git-tree-sha1 = "f631a4de315d3486ec768f9e9a6a3a85660427e8"
+deps = ["AbstractTrees", "ArrayInterface", "Bijections", "ChainRulesCore", "Combinatorics", "ConstructionBase", "DataStructures", "DocStringExtensions", "DynamicPolynomials", "ExproniconLite", "LinearAlgebra", "MultivariatePolynomials", "NaNMath", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArrays", "SymbolicIndexingInterface", "TaskLocalValues", "TermInterface", "TimerOutputs", "Unityper", "WeakValueDicts"]
+git-tree-sha1 = "e893939e258de0de23dc233ec6a618a4b53554ff"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
-version = "3.11.0"
+version = "3.27.0"
 
     [deps.SymbolicUtils.extensions]
     SymbolicUtilsLabelledArraysExt = "LabelledArrays"
@@ -2011,9 +1700,9 @@ version = "3.11.0"
 
 [[deps.Symbolics]]
 deps = ["ADTypes", "ArrayInterface", "Bijections", "CommonWorldInvalidations", "ConstructionBase", "DataStructures", "DiffRules", "Distributions", "DocStringExtensions", "DomainSets", "DynamicPolynomials", "IfElse", "LaTeXStrings", "Latexify", "Libdl", "LinearAlgebra", "LogExpFunctions", "MacroTools", "Markdown", "NaNMath", "OffsetArrays", "PrecompileTools", "Primes", "RecipesBase", "Reexport", "RuntimeGeneratedFunctions", "SciMLBase", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArraysCore", "SymbolicIndexingInterface", "SymbolicLimits", "SymbolicUtils", "TermInterface"]
-git-tree-sha1 = "1211b5df046c13c955ba90c210c6394b99b2d1eb"
+git-tree-sha1 = "e021ac0b4dc29ce0a5b38fd91c27bd36d6d7df13"
 uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7"
-version = "6.24.0"
+version = "6.29.1"
 
     [deps.Symbolics.extensions]
     SymbolicsForwardDiffExt = "ForwardDiff"
@@ -2059,6 +1748,11 @@ deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 version = "1.10.0"
 
+[[deps.TaskLocalValues]]
+git-tree-sha1 = "d155450e6dff2a8bc2fcb81dcb194bd98b0aeb46"
+uuid = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
+version = "0.1.2"
+
 [[deps.TermInterface]]
 git-tree-sha1 = "d673e0aca9e46a2f63720201f55cc7b3e7169b16"
 uuid = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
@@ -2071,9 +1765,15 @@ version = "1.11.0"
 
 [[deps.TimerOutputs]]
 deps = ["ExprTools", "Printf"]
-git-tree-sha1 = "d7298ebdfa1654583468a487e8e83fae9d72dac3"
+git-tree-sha1 = "3832505b94c1868baea47764127e6d36b5c9f29e"
 uuid = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
-version = "0.5.26"
+version = "0.5.27"
+
+    [deps.TimerOutputs.extensions]
+    FlameGraphsExt = "FlameGraphs"
+
+    [deps.TimerOutputs.weakdeps]
+    FlameGraphs = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -2108,9 +1808,9 @@ version = "1.2.13+1"
 
 [[deps.Zstd_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "622cf78670d067c738667aaa96c553430b65e269"
+git-tree-sha1 = "446b23e73536f84e8037f5dce465e92275f6a308"
 uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
-version = "1.5.7+0"
+version = "1.5.7+1"
 
 [[deps.bliss_jll]]
 deps = ["Artifacts", "GMP_jll", "JLLWrappers", "Libdl", "Pkg"]
@@ -2143,15 +1843,15 @@ version = "5.11.0+0"
 
 [[deps.libcxxwrap_julia_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "b386562c39065094e2d1e1939ea289dbd448fe3e"
+git-tree-sha1 = "70091a11c756455c15bc6380ea000c16f38f2d3e"
 uuid = "3eaa8342-bff7-56a5-9981-c04077f7cee7"
-version = "0.13.3+0"
+version = "0.13.4+0"
 
 [[deps.libpolymake_julia_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "FLINT_jll", "JLLWrappers", "Libdl", "TOPCOM_jll", "lib4ti2_jll", "libcxxwrap_julia_jll", "polymake_jll"]
-git-tree-sha1 = "4885c6d17996ea3fa5492cfe8c68f0f52be82820"
+git-tree-sha1 = "d05957bb0eacb2747e6d042d56034b005c220561"
 uuid = "4d8266f6-2b3b-57e3-ad7a-d431eaaac945"
-version = "0.13.0+0"
+version = "0.13.1+0"
 
 [[deps.lrslib_jll]]
 deps = ["Artifacts", "GMP_jll", "JLLWrappers", "Libdl", "Pkg"]
@@ -2189,132 +1889,98 @@ version = "400.1300.2+0"
 
 [[deps.polymake_oscarnumber_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl", "libcxxwrap_julia_jll", "libpolymake_julia_jll", "polymake_jll"]
-git-tree-sha1 = "0f1f590da4a2323defeecbf50a1d21448e7108fc"
+git-tree-sha1 = "14b654205ab1599612521c587f5b11c662ba0ed1"
 uuid = "10f31823-b687-53e6-9f29-edb9d4da9f9f"
-version = "0.3.3+1"
+version = "0.3.4+0"
 
 [[deps.snappy_jll]]
-deps = ["Artifacts", "JLLWrappers", "LZO_jll", "Libdl", "Lz4_jll", "Zlib_jll"]
-git-tree-sha1 = "a6c92533edec9755b3c1083b028da19a41f92e25"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "8bb12ecfc3ffde2ef72a957cf2fab27cc193d251"
 uuid = "fe1e1685-f7be-5f59-ac9f-4ca204017dfd"
-version = "1.2.1+3"
+version = "1.2.2+0"
 """
 
 # ╔═╡ Cell order:
 # ╠═a3e5efb2-f8ef-45e7-be41-b1b05a6253bb
+# ╠═1c9ecfc8-a36a-477b-9670-822fe20bd873
 # ╠═5b2c43a4-dd97-11ef-1c79-1b5007c54b8d
 # ╠═fae50ce3-b791-4012-a202-57c6cdf8db6f
-# ╠═719a18c6-4dd9-4633-9d5d-771bbd858ab4
 # ╠═0f14d7f7-16d3-4c1e-9b47-195c5c5abbe2
 # ╠═afd7d500-7975-48e9-9467-2c6c59ae824c
 # ╠═747f9307-4f18-4d8d-b85d-691da228aeb1
-# ╠═56f1afbd-91a7-4820-9ac4-88eedfc843e9
-# ╠═76e48c1c-913a-4d39-ab5b-25654c3daa87
-# ╠═bded0dea-feb6-4156-9c5e-69e95325089a
-# ╠═3c9f89cf-c45e-4943-a375-99cb35c630ad
-# ╠═6ae0a0b0-0134-4cc3-a52d-fda551ace3c3
-# ╠═56fea39d-0a9d-4f70-8892-934a88264123
-# ╠═db24b03a-02dc-4d9b-834d-b4387b46c875
+# ╠═1300785b-a1b4-469b-af15-d74269b8f790
+# ╠═df693074-1d7b-4280-a7d2-7aa1ed25b691
+# ╠═f054e974-f9cc-4065-97ae-3b0aa1ab4522
+# ╠═312dfd9d-e4d0-4fac-a2eb-0191020ff66a
+# ╠═956e09aa-578e-4226-9189-9def91b2dd94
+# ╠═b8485207-4ed1-48a2-b27a-90cb65097613
 # ╠═65b8f904-b394-464f-a8c7-cd6ac88ca6e0
-# ╠═cda53267-e690-4891-9a53-581e1ff683dd
-# ╠═002a96fe-1395-4200-9074-dcc591b39fc1
-# ╠═5174ba72-74e8-4ae2-b504-fa4a36f84b01
-# ╠═4d2d10ad-55e0-4f69-a52f-fac7ad0c3b5d
-# ╠═dfdeb32d-6c6e-4704-8006-ad7ab1233ed7
-# ╠═eb4541cd-29fc-4f41-b668-97701ba9efbe
-# ╠═2f0ed098-5d7e-4f3e-8ef0-97cb09d9dad4
-# ╠═4fb7b3e5-86d5-4b6a-94f8-b155ab1b6e2d
-# ╠═8176fa85-c220-4c41-a221-9f48eb090e74
-# ╠═ff29b293-0bb7-491c-85da-1112d61a5f32
-# ╠═ceab87f9-4a40-4de4-9b16-49141064393a
-# ╠═1c071329-005a-496e-ad78-f535286e7d6c
-# ╠═39164e66-13d0-483c-b0f4-9cedb5d030d4
-# ╠═4b85ad51-8cc6-4382-966e-dc6ce3172690
-# ╠═00681b2c-6ae0-48b5-8cfd-29d90384a7dd
-# ╠═686dd79f-4815-455c-8123-f60e7656357c
 # ╠═960fc95e-b0f4-4fce-8481-8ffec865bf33
 # ╠═e27d30dc-5f52-468d-b482-2edf6aa67c88
 # ╠═af89df1d-7afd-47ba-b93d-035d33e1c75c
-# ╠═73a9d5f0-cade-432f-aeeb-6f530532342d
 # ╠═e7806bb9-3fa0-4395-99ea-28f0b9f2b98c
 # ╠═2bd8e1ac-471c-435c-af62-717c1d50d8e0
 # ╠═4a021ce4-d60a-4289-a45f-e7437384918f
 # ╠═4f722a34-aaf7-4ef3-8d9e-46102be79e09
-# ╠═dcbe98d9-25a6-4666-a7ff-57b28a6d1eb2
-# ╠═d0adbc23-f2e2-46de-af36-55c2e5a4f276
-# ╠═eb00d49e-7107-4a43-a4fb-1c359138d252
-# ╠═9fcad0b6-ac34-4286-b54f-f26b6a70291e
-# ╠═ee4558c0-af44-4aa5-a863-426ca84c0a8d
-# ╠═dfefa444-3fbc-42a4-96aa-c2af75f00425
 # ╠═211351c0-cdc2-4635-b75c-cdfab56dec1b
-# ╠═0863c1fb-eac8-4839-808f-1c0c69937e19
-# ╠═1aac79d1-623a-4123-92f5-17949b3b70e0
 # ╠═70c9dc2b-ee54-4efe-83c5-ac2224bbf667
 # ╠═c89ec467-445c-46d4-b2f3-e9879141ab28
 # ╠═3ca7f2a9-3eb1-4116-bdb1-6d7037843139
 # ╠═04f99662-3dd8-4b5a-b767-e40dd2433650
 # ╠═7c732636-97a1-4574-a602-d12c43a5b4a1
-# ╠═ac0d7d98-5a89-4749-8ad4-9fab2258ebbb
-# ╠═2de7a938-5313-46f6-8b4d-2ad7274763cf
-# ╠═1ed37f79-88f3-47af-a954-e0f566791251
 # ╠═7af6967b-1c9b-4fc7-b00d-4fb7cc589547
+# ╠═dcbe98d9-25a6-4666-a7ff-57b28a6d1eb2
+# ╠═d0adbc23-f2e2-46de-af36-55c2e5a4f276
 # ╠═01189806-4949-47be-b510-115b62c0bde0
-# ╠═2dbb1bb4-30f9-4511-9b37-1967e2b17ede
-# ╠═ccec7fe9-dd54-446a-851b-1e808637d1f0
-# ╠═6b4f88f9-7504-45d8-9438-5343cbbbb015
 # ╠═6368417b-1ac3-4400-84f9-f602ace3516f
 # ╠═e0a016c3-a3f1-49a4-aadd-20c018835547
-# ╠═af4fecfe-ad6e-401f-bfd6-390fa091c26c
-# ╠═b464faa3-4fe7-4eb9-920a-77f17b47d7c1
-# ╠═4f838718-c2db-4efb-8ad9-95af179e774f
-# ╠═7af65f65-fc55-47e7-868e-a2a96168b2e2
-# ╠═9584573e-e2fb-44f0-b843-c4a8b1183e7e
-# ╠═a1907a8c-81f5-4f27-a7f2-ffa34be9457d
-# ╠═36721cd7-608f-4ba6-9e4c-096f913cb882
 # ╠═845a0f6b-6628-4ee6-a89b-0b6ec31b6187
-# ╠═52873363-960a-4cd1-9e70-ac7055f928d7
+# ╠═634a0421-25b5-4bb6-963f-916f310ab4ed
 # ╠═097e42ca-56ed-4a03-8ba8-0d8faafa849d
-# ╠═5393fae8-ee75-4647-9205-56faeb53b176
-# ╠═078c01ce-886d-4e14-89fa-d201affd8ff0
-# ╠═7f55c842-2e3f-4764-be9a-9c510626d362
-# ╠═a5206183-58a5-430e-89b9-1e7e87d623c5
-# ╠═bb25f4cc-ff1f-4f67-990e-530e0a369b2f
-# ╠═a2ddce7c-22ab-4b22-a46a-188c123bed82
-# ╠═be10a598-918c-4bec-af4d-017e9522e948
-# ╠═26172237-30a0-46e8-a825-b9ab3ebd112f
-# ╠═6fdd1ad0-3fa3-41eb-8e6c-a11f63db2fdc
-# ╠═189b646c-1812-4b35-a433-718e2580346a
-# ╠═5fbbb173-fe2c-4538-aa4e-379396331c05
-# ╠═d444f5c6-8686-4ab6-ac31-7e9f90ac9d35
-# ╠═f6254849-8c30-49e4-a736-0b10577b46f0
-# ╠═b403367b-93a8-4a73-bd13-48b372d23a52
-# ╠═5ac3cc96-7e85-45a9-972d-b7fb1bc4a3bf
-# ╠═82b0d9ec-ffe8-4491-b707-5379fee808c4
-# ╠═300cdd94-3f84-4240-bd1c-6fa21d252664
-# ╠═475bd32e-2eba-4a44-9d21-c7ae214a3438
-# ╠═ecc9e495-347f-479c-94a6-3578c63f0eae
-# ╠═de72a522-9c20-4f27-a4b6-ea86cdef68cf
-# ╠═1b20a227-d07a-4a3d-9a0a-703b3ced4177
-# ╠═ab319d11-b4c0-4559-bf53-75c4297bf3b5
-# ╠═2074cd20-8e28-481c-aaa0-24bdbb1bd41d
-# ╠═f25b25e5-42ee-4f03-9ba8-2f756a74569d
-# ╠═4b986231-8c14-40fe-9934-18089e11bc76
-# ╠═a242f773-e719-4401-afed-90669b4442f8
-# ╠═c3d0d178-6228-47af-a470-24a117e149b7
-# ╠═bca104b9-852b-46ce-8ce8-dadd6d45d418
-# ╠═18273213-efb2-4e64-9651-5983780e0e09
-# ╠═6e4a6519-aa95-42dc-941e-41ef445c6c6a
-# ╠═c9c6d515-5e92-48fe-a990-15c6e85d4e28
-# ╠═254166fa-2fa6-4fad-b3fb-57d8d9100eee
-# ╠═3b58ab04-48a6-4da8-87f7-6df41b0c3e6c
-# ╠═80967c37-7227-45e6-ae49-48cc5053c8a5
-# ╠═1596e4d3-fd60-4ba4-852e-24486ba3df0a
-# ╠═86cc36e2-1766-4a63-9b8b-92ec2b589ebb
-# ╠═3bcdc4cc-5b49-4617-a362-adfeda9ae1c5
-# ╠═3952d683-6446-445d-8b02-3922a9125d35
-# ╠═baa2348f-4be2-4acf-861b-325601dd62bf
-# ╠═48b4e6ce-a283-4f0b-92fe-4c0ded6571dd
-# ╠═0781d38c-6eb2-48ca-afdf-bc520034eea6
-# ╠═93f2a35d-01da-411e-9563-53e40d83084d
+# ╠═f7f4ca84-bf8f-4962-a898-b92412db4bdd
+# ╠═5c91579c-34a0-448a-b5b4-08d95693ac10
+# ╠═0bddbbd1-efa4-4d4e-9cb9-33ef6f83aae5
+# ╠═d65b475d-79f7-4227-a33c-045f83b3e5d0
+# ╠═a06ec159-edaf-441e-92ae-ebe60330bbb4
+# ╠═8436dbb4-cbde-428b-a1e1-ca0c19270ab5
+# ╠═d8b1d015-016c-4a43-a85f-43c113f1c2f9
+# ╠═37b7624b-f0d1-434f-83c6-1dbff3265525
+# ╠═89e3aa92-021f-4a9e-8c5a-e17c01d51e0c
+# ╠═1b3f732b-e2e1-409d-95b6-927a70936a78
+# ╠═ba6c595e-0b6e-4076-a072-94fb4e80598b
+# ╠═2f24f384-eddc-4a64-a4e8-091f50210aee
+# ╠═66306ed4-dbff-4641-a6ca-9ab7ab7fb5b4
+# ╠═3526c412-82e6-42b8-ae07-7e6605b84b64
+# ╠═0f398106-1db4-491c-8ed2-24978cf9cc21
+# ╠═63910e9a-8c8c-4144-b6ca-ca15dc59bbde
+# ╠═9463d81b-f700-4560-a12f-488cbc323867
+# ╠═464c9484-8dc0-4d36-beb2-54abdcdf329e
+# ╠═be7e8e24-bc14-45c0-99fb-4c0b32797e9d
+# ╠═a1ef391c-65e5-4188-9dc8-759ffc9182ed
+# ╠═fb6c5e16-11fd-414e-8347-64dc12de97b7
+# ╠═e9b461a5-231f-4776-ad44-9344a8bb182c
+# ╠═2e6ca780-e780-46cc-8d15-f8504ea63dc9
+# ╠═d05c8cc6-95c1-4707-a483-91f412dcb368
+# ╠═0f846dbf-194e-4052-a148-ad93fe93a7ce
+# ╠═6ffc1041-21db-4030-88fc-82d35ceb5584
+# ╠═0665a407-0de6-40b0-b312-cdb09a76fc3a
+# ╠═6eb16052-ee49-44fd-921b-90a0b47db1d7
+# ╠═1b5990cf-17ab-4676-b63e-0317602738f6
+# ╠═e4dbe57f-062b-4ea5-a8c7-443c3e54491b
+# ╠═94195c83-7a5d-4cec-ad1d-4a2cae1e4006
+# ╠═748443e6-d85f-46cb-b7d7-83a942e8e841
+# ╠═a36264ce-ca20-4008-afd1-e849b680596b
+# ╠═253b9439-e316-4185-b9d2-3223ec733872
+# ╠═e5c106d6-0002-46d2-9ff6-d21bc0adfc7d
+# ╠═5a05e709-c932-4fab-8000-848374f96b4b
+# ╠═2eac58c8-5c22-4426-af72-06f81c11ba5c
+# ╠═82407c48-4256-4ea2-ac1f-accbc99c7b42
+# ╠═97c74a06-c53e-444c-bdd8-4335e2cb5826
+# ╠═b908088e-324c-42a0-b019-150eec489d5b
+# ╠═eb0939cc-dcc0-49e0-b964-134bbfac24cd
+# ╠═53bdbe99-d1b0-460f-b116-d8d480e6f938
+# ╠═f59dfc1a-71bc-48f0-982c-c7a2a984a8e0
+# ╠═a0a43e95-9d74-458f-a8af-49f0a4138245
+# ╠═2217761d-f38b-4e79-8874-c3c679b622ed
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -7,129 +7,20 @@ using InteractiveUtils
 # ╔═╡ 1529505c-cc19-11ef-3358-6bc94b79ee9e
 using Symbolics
 
-# ╔═╡ c769438f-2209-4bfd-8600-84c6f55d8d66
-using Latexify
+# ╔═╡ d25f73d8-770f-498d-9094-b5fe815e8daa
+using SimplePlutoInclude
 
-# ╔═╡ a02ab673-63bc-4097-9faa-dff136bd7919
-abstract type AbstractSeries end
-
-# ╔═╡ 8e42d1ae-331f-4acf-b863-914c9264c687
-@variables t
-
-# ╔═╡ f99f7392-3de5-4e85-84ab-318d54a8525f
-struct PolynomialSeries <: AbstractSeries
-	polyn::Symbolics.Num
-end
-
-# ╔═╡ d13d8993-9e4f-4458-ab16-bd6c03e0a76b
-struct FiniteSeries <: AbstractSeries
-	coeffs::Vector
-end
-
-# ╔═╡ 54b091f7-f7fc-4616-8789-af5970e40467
-abstract type CacheSeries <: AbstractSeries end
-
-# ╔═╡ 4b9a5add-da63-4c18-8f4e-1b0dab8c8efe
-struct InverseSeries <: CacheSeries
-	orig::AbstractSeries
-	cache::Vector
-	InverseSeries(orig) = new(orig, [])
-end
-
-# ╔═╡ 4dadd018-b8ec-440b-adfc-f9a6b2e070ae
-struct MultSeries <: CacheSeries
-	a::AbstractSeries
-	b::AbstractSeries
-	cache::Vector
-	MultSeries(a, b) = new(a, b, [])
-end
-
-# ╔═╡ b613e82d-c12c-4836-aa0a-2553029b8733
-function Base.:*(a::AbstractSeries, b::AbstractSeries)
-	return MultSeries(a, b)
-end
-
-# ╔═╡ 0ee7449f-62b9-485c-9b1e-4754a7712875
-function Base.:/(a::AbstractSeries, b::AbstractSeries)
-	return MultSeries(a, InverseSeries(b))
-end
-
-# ╔═╡ 64e7d03d-8753-44c4-b144-1264e3944071
-struct MinusSeries <: AbstractSeries
-	orig::AbstractSeries
-end
-
-# ╔═╡ 770cff50-3b2d-413f-9806-c38f047d6f9a
-function Base.:-(s::AbstractSeries)
-	return MinusSeries(s)
-end
-
-# ╔═╡ 557d90c7-f8bc-434f-97d5-307c84592604
-struct AddSeries <: AbstractSeries
-	a::AbstractSeries
-	b::AbstractSeries
-end
-
-# ╔═╡ 011a553e-b2de-4120-aa3c-5c53bc3265f7
-function Base.:+(a::AbstractSeries, b::AbstractSeries)
-	return AddSeries(a, b)
-end
-
-# ╔═╡ 3efa28ba-084b-4241-9bbd-c6f7fee6be88
-function get_coeff(series::FiniteSeries, index)
-	if index + 1 > length(series.coeffs)
-		return 0
-	else
-		return series.coeffs[index + 1]
-	end
-end
-
-# ╔═╡ 5a484e82-16ed-490a-afc2-a5ce1d9dec3a
-function get_coeff(s::AddSeries, index)
-	return get_coeff(s.a, index) + get_coeff(s.b, index)
-end
-
-# ╔═╡ ba3a8d3b-6fcc-4ca0-9be4-e0cf20536d15
-function Base.:-(a::AbstractSeries, b::AbstractSeries)
-	return AddSeries(a, MinusSeries(b))
-end
-
-# ╔═╡ c21423c3-c13c-462d-b339-8f1c1c544260
-function get_coeff(s::MinusSeries, index)
-	return -get_coeff(s.orig, index)
-end
-
-# ╔═╡ 8064c958-e71e-45b0-9058-2202eb0f92d8
-function Base.:^(a::AbstractSeries, e::Integer)
-	if e == 0
-		return FiniteSeries([1])
-	elseif e > 0
-		return a * (a ^ (e - 1))
-	else
-		inv = InverseSeries(a)
-		return inv ^ (-e)
-	end
-end
-
-# ╔═╡ a5c3dad7-6700-462d-ae63-6f823a9804c4
-function get_coeff(s::PolynomialSeries, i)
-	return Symbolics.coeff(s.polyn, t^i)
-end
+# ╔═╡ 960e9b0a-3a28-4f7f-9ebe-e1c6705312bf
+@plutoinclude "../Series.jl" all=false
 
 # ╔═╡ d8cdba7d-df75-4231-b516-59a5e0cd6a96
 function lambda(p)
 	result = FiniteSeries([1])
 	for (monom, coeff) in polynomial_coeffs(p, Symbolics.get_variables(p))[1]
-		result *= FiniteSeries([1, monom])^coeff
+		result *= BinomialSeries(coeff) ⊙ GeometricSeries(monom)
 	end
 	return result
 end
-
-# ╔═╡ cb0bc7d6-c563-40e4-ac8a-414967da2acc
-@variables x y z
-
-# ╔═╡ b7465dea-1c5a-4a0e-b34f-aed9ac006e4e
-polynomial_coeffs(x * y + y + x , (x, y))
 
 # ╔═╡ 279499c0-d576-492a-831e-e1af7837f30d
 function apply_operator(op, polyn)
@@ -144,138 +35,50 @@ function apply_operator(op, polyn)
 	return expand(result)
 end
 
+# ╔═╡ 63338baa-fa61-46b9-a4d6-7746d8f3f436
+first_coeffs(LogSeries(), 5)
+
+# ╔═╡ cb0bc7d6-c563-40e4-ac8a-414967da2acc
+@variables x y z
+
+# ╔═╡ 001b2d51-59e9-4ed7-9ea0-597e4093a4ff
+first_coeffs(lambda(1//2), 5)
+
 # ╔═╡ d4d1003d-728f-4962-ba54-77aab9ffeab9
 apply_operator((x - 1)^2 - 2 * (y - 1), x^2 + y)
 
 # ╔═╡ 642d37f9-5c10-4bae-bae1-c62bb13f4fc1
 typeof(1 + x)
 
-# ╔═╡ d881af8f-b247-4d15-b17d-3da4976f631c
-begin
-	import Base: convert
-	convert(::Type{AbstractSeries}, p::Symbolics.Num) = PolynomialSeries(p)
-	convert(::Type{AbstractSeries}, a::Vector) = FiniteSeries(a)
-	convert(::Type{AbstractSeries}, n::Number) = FiniteSeries([n])
-	series(o) = convert(AbstractSeries, o)
-end
-
-# ╔═╡ ef3c283c-cb5d-46fd-9829-53166dbeb3d4
-InverseSeries(1 + t)
-
 # ╔═╡ 201a9b6a-ff47-47ac-a914-a25277c50b8f
 lambda((1 - x)*(1 - y))
-
-# ╔═╡ fab786f5-0ef4-483f-a70b-bc61caeb7d43
-struct GenericSeries <: AbstractSeries
-	symbol::Symbol
-end
-
-# ╔═╡ d90aaef5-2d5e-4b3e-bf4d-073cc26cec2b
-function get_coeff(series::GenericSeries, deg)
-	if (deg == 0) return 1 end
-	return Symbolics.variable(series.symbol, deg)
-end
-
-# ╔═╡ 9c03dd2a-fbfb-457d-a894-aa1251c09ae8
-struct ElemMultSeries <: AbstractSeries
-	a::AbstractSeries
-	b::AbstractSeries
-end
-
-# ╔═╡ 3f067604-98cb-4235-a000-905f36415584
-function get_coeff(series::ElemMultSeries, deg)
-	return get_coeff(series.a, deg) * get_coeff(series.b, deg)
-end
-
-# ╔═╡ 23ccbd9b-a4c3-4432-bb07-13a153f72622
-function Base.:∘(a::AbstractSeries, b::AbstractSeries)
-	return ElemMultSeries(a, b)
-end
-
-# ╔═╡ 2a2682cc-b4bb-43d7-ba34-76b1e7297e96
-struct PowerSeries <: AbstractSeries
-	a
-end
-
-# ╔═╡ 752daf3c-da62-4026-a3b2-bc1cde8cc1b0
-function get_coeff(series::PowerSeries, deg)
-	return series.a^deg
-end
-
-# ╔═╡ 48c5e2cc-3c3b-4678-9663-2fa9e0574c39
-function compute_coeff(series::InverseSeries, index)
-	if index == 0
-		return 1//get_coeff(series.orig, 0)
-	end
-	d = index - 1
-	p = polyn_head(series.orig, d + 1)
-	q = polyn_head(series, d)
-	r = expand(p * q)
-	return -expand(Symbolics.coeff(r, t^index)//get_coeff(series.orig, 0))
-end
-
-# ╔═╡ 8010f6c5-deb4-45ed-be95-aae8d22ae616
-function get_coeff(series::CacheSeries, index)
-	while length(series.cache) < index + 1
-		push!(series.cache, compute_coeff(series, length(series.cache)))
-	end
-	return series.cache[index + 1]
-end
-
-# ╔═╡ 2f55feaa-3b64-4513-becc-df08c0bbd2dc
-function first_coeffs(series::AbstractSeries, n)
-	return [get_coeff(series, i) for i in 0:n]
-end
-
-# ╔═╡ a9490260-8f23-4c35-8f6b-a668bab03a87
-function polyn_head(series::AbstractSeries, d)
-	return sum(first_coeffs(series, d) .* [t^i for i in 0:d]; init=0)
-end
-
-# ╔═╡ 836ed29d-d3d2-48f1-b1ab-7ade9cf4a586
-function compute_coeff(series::MultSeries, d)
-	p = polyn_head(series.a, d)
-	q = polyn_head(series.b, d)
-	r = expand(p*q)
-	return expand(Symbolics.coeff(r, t^d))
-end
-
-# ╔═╡ f31ec606-77e5-4ac0-9d1e-a555dad3282e
-polyn_head(lambda(x^2 + x), 10)
-
-# ╔═╡ f9aa9caa-1c8a-4a62-b5e8-26af00010a4c
-function print_series(io::IO, s::AbstractSeries, deg::Int)
-	print(io, "\$\$" * latexify(polyn_head(s, deg)) * "+ o(t^{$deg}) \$\$")
-end
-
-# ╔═╡ c619a899-acc1-4c3e-845d-27279185f9d1
-function Base.show(io::IO, m::MIME"text/latex", s::AbstractSeries)
-	print_series(io, s, 5)
-end
-
-# ╔═╡ 1bd2e606-5f74-467b-a3cb-dae0411d86ce
-polyn_head(series(1)/series(1 + t^2), 10)
-
-# ╔═╡ 969a4aaf-3a5b-4226-add7-36daf865af47
-GenericSeries(:a) / (PowerSeries(x) ∘ GenericSeries(:a))
-
-# ╔═╡ 21bf1ac0-5e50-4e66-a294-a8b4d4153ef1
-lambda(2(1 - x)^2 - (1 - y)^2)
 
 # ╔═╡ 52a6ec22-c3f6-4b94-8b96-904c7a9da837
 D(x) = 1 - x
 
 # ╔═╡ c6e3138a-9f6e-4858-81eb-4c9a0324dbeb
-expand(substitute(get_coeff(lambda(3*D(x)^2 - D(y)^2 - D(y)^3), 3), Dict(x => 1 -x, y => 1 - y)))
+expand(substitute(get_coeff(lambda(D(x) + D(x)^2//2 + D(x)^3//3 + D(x)^4//4 + D(x)^5//5 + D(x)^6//6 + D(x)^7//7 + D(x)^8//8), 1), Dict(x => 1 -x, y => 1 - y)))
+
+# ╔═╡ b722d699-0ec1-4e0f-8c4b-64a9b2c90d0f
+apply_operator(get_coeff(lambda(-2*D(x) - D(x)^2), 1), x^2 + x + x*y)
+
+# ╔═╡ 695f16c9-cd75-41a2-9d3d-9948e5858a19
+expand(substitute(get_coeff(lambda(D(x) - D(y)), 2), Dict(x => 1 - x, y => 1 - y)))
+
+# ╔═╡ 9a0ce425-00c5-4821-afb4-d51eca70db1f
+apply_operator(get_coeff(lambda(D(x) + D(y)), 1), x-y)
+
+# ╔═╡ 08a461bb-3feb-4bdf-9e3b-3f07546e1ebf
+expand(substitute(get_coeff(lambda(D(x)^2 + 2*D(y)), 2), Dict(x => 1 - x, y => 1 - y, z=>1-z)))
 
 # ╔═╡ 8ad78a55-9e1a-4949-9790-534d69c47531
-apply_operator(get_coeff(lambda(D(x)^2 + 2*D(y)), 2), x^2 + y)
+apply_operator(get_coeff(lambda(D(x)^2 + 2*D(y)), 1), x^2 + y)
 
 # ╔═╡ 6c7c678a-e691-4705-bb4f-f20129ee09a0
 expand(substitute(get_coeff(lambda(D(x)^2 - 2*D(y)), 2), Dict(x => 1 - x, y => 1 - y, z=>1-z)))
 
 # ╔═╡ b6eec44d-f5ae-4582-af1a-0b2600a1b5d4
-apply_operator(D(x) + D(y), x^2*y^2 + y^4)
+apply_operator(get_coeff(lambda(D(x) + D(y) + D(z)), 3), x + y - 2 * z)
 
 # ╔═╡ ce2abd81-2c0d-485e-a25a-79f78b8807d1
 lambda(-6D(x)-3D(x)^2-1)
@@ -286,11 +89,11 @@ expand(substitute(get_coeff(lambda(-24D(x)-12D(x)^2-4D(x)^3-D(x)^4), 4), Dict(x 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
+SimplePlutoInclude = "6f00a2c5-ea4a-46bf-9183-91b7b57a087f"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]
-Latexify = "~0.16.5"
+SimplePlutoInclude = "~0.2.0"
 Symbolics = "~6.18.3"
 """
 
@@ -300,7 +103,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "1acc52fa683a98b620038985a381b5e04459366a"
+project_hash = "7404e22520dc515782537df579157219342b3404"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "eea5d80188827b35333801ef97a40c2ed653b081"
@@ -995,6 +798,12 @@ git-tree-sha1 = "e2cc6d8c88613c05e1defb55170bf5ff211fbeac"
 uuid = "efcf1570-3423-57d1-acb7-fd33fddbac46"
 version = "1.1.1"
 
+[[deps.SimplePlutoInclude]]
+deps = ["Dates"]
+git-tree-sha1 = "a98dee6bdc63f648d92b28348dcb9b59c2881fbf"
+uuid = "6f00a2c5-ea4a-46bf-9183-91b7b57a087f"
+version = "0.2.0"
+
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 version = "1.11.0"
@@ -1202,55 +1011,22 @@ version = "17.4.0+2"
 
 # ╔═╡ Cell order:
 # ╠═1529505c-cc19-11ef-3358-6bc94b79ee9e
-# ╠═a02ab673-63bc-4097-9faa-dff136bd7919
-# ╠═8e42d1ae-331f-4acf-b863-914c9264c687
-# ╠═f99f7392-3de5-4e85-84ab-318d54a8525f
-# ╠═a5c3dad7-6700-462d-ae63-6f823a9804c4
-# ╠═d13d8993-9e4f-4458-ab16-bd6c03e0a76b
-# ╠═3efa28ba-084b-4241-9bbd-c6f7fee6be88
-# ╠═2f55feaa-3b64-4513-becc-df08c0bbd2dc
-# ╠═a9490260-8f23-4c35-8f6b-a668bab03a87
-# ╠═54b091f7-f7fc-4616-8789-af5970e40467
-# ╠═8010f6c5-deb4-45ed-be95-aae8d22ae616
-# ╠═4b9a5add-da63-4c18-8f4e-1b0dab8c8efe
-# ╠═48c5e2cc-3c3b-4678-9663-2fa9e0574c39
-# ╠═4dadd018-b8ec-440b-adfc-f9a6b2e070ae
-# ╠═836ed29d-d3d2-48f1-b1ab-7ade9cf4a586
-# ╠═b613e82d-c12c-4836-aa0a-2553029b8733
-# ╠═0ee7449f-62b9-485c-9b1e-4754a7712875
-# ╠═64e7d03d-8753-44c4-b144-1264e3944071
-# ╠═c21423c3-c13c-462d-b339-8f1c1c544260
-# ╠═770cff50-3b2d-413f-9806-c38f047d6f9a
-# ╠═557d90c7-f8bc-434f-97d5-307c84592604
-# ╠═5a484e82-16ed-490a-afc2-a5ce1d9dec3a
-# ╠═011a553e-b2de-4120-aa3c-5c53bc3265f7
-# ╠═ba3a8d3b-6fcc-4ca0-9be4-e0cf20536d15
-# ╠═8064c958-e71e-45b0-9058-2202eb0f92d8
+# ╠═d25f73d8-770f-498d-9094-b5fe815e8daa
+# ╠═960e9b0a-3a28-4f7f-9ebe-e1c6705312bf
 # ╠═d8cdba7d-df75-4231-b516-59a5e0cd6a96
-# ╠═cb0bc7d6-c563-40e4-ac8a-414967da2acc
-# ╠═b7465dea-1c5a-4a0e-b34f-aed9ac006e4e
 # ╠═279499c0-d576-492a-831e-e1af7837f30d
-# ╠═f31ec606-77e5-4ac0-9d1e-a555dad3282e
+# ╠═63338baa-fa61-46b9-a4d6-7746d8f3f436
+# ╠═cb0bc7d6-c563-40e4-ac8a-414967da2acc
+# ╠═001b2d51-59e9-4ed7-9ea0-597e4093a4ff
 # ╠═d4d1003d-728f-4962-ba54-77aab9ffeab9
 # ╠═642d37f9-5c10-4bae-bae1-c62bb13f4fc1
-# ╠═c769438f-2209-4bfd-8600-84c6f55d8d66
-# ╠═d881af8f-b247-4d15-b17d-3da4976f631c
-# ╠═f9aa9caa-1c8a-4a62-b5e8-26af00010a4c
-# ╠═c619a899-acc1-4c3e-845d-27279185f9d1
-# ╠═ef3c283c-cb5d-46fd-9829-53166dbeb3d4
-# ╠═1bd2e606-5f74-467b-a3cb-dae0411d86ce
 # ╠═201a9b6a-ff47-47ac-a914-a25277c50b8f
-# ╠═fab786f5-0ef4-483f-a70b-bc61caeb7d43
-# ╠═d90aaef5-2d5e-4b3e-bf4d-073cc26cec2b
-# ╠═9c03dd2a-fbfb-457d-a894-aa1251c09ae8
-# ╠═3f067604-98cb-4235-a000-905f36415584
-# ╠═23ccbd9b-a4c3-4432-bb07-13a153f72622
-# ╠═2a2682cc-b4bb-43d7-ba34-76b1e7297e96
-# ╠═752daf3c-da62-4026-a3b2-bc1cde8cc1b0
-# ╠═969a4aaf-3a5b-4226-add7-36daf865af47
-# ╠═21bf1ac0-5e50-4e66-a294-a8b4d4153ef1
 # ╠═c6e3138a-9f6e-4858-81eb-4c9a0324dbeb
 # ╠═52a6ec22-c3f6-4b94-8b96-904c7a9da837
+# ╠═b722d699-0ec1-4e0f-8c4b-64a9b2c90d0f
+# ╠═695f16c9-cd75-41a2-9d3d-9948e5858a19
+# ╠═9a0ce425-00c5-4821-afb4-d51eca70db1f
+# ╠═08a461bb-3feb-4bdf-9e3b-3f07546e1ebf
 # ╠═8ad78a55-9e1a-4949-9790-534d69c47531
 # ╠═6c7c678a-e691-4705-bb4f-f20129ee09a0
 # ╠═b6eec44d-f5ae-4582-af1a-0b2600a1b5d4

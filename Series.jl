@@ -1,42 +1,52 @@
 module Series
 
 using Symbolics
-using Latexify
 
-export GenericSeries, FiniteSeries, PowerSeries, PolynomialSeries, BinomialSeries
-export get_coeff
+export FiniteSeries, GeometricSeries, BinomialSeries, ExpSeries, LogSeries
+export get_coeff, first_coeffs, first_nonzero_index, ⊙
 
-import Base: +, /, *, ^, ∘, -, <<, show
+import Base: +, /, *, ^, -, <<, >>, show, getindex, inv
+
+#####################
+# ABSTRACT TYPES
+#####################
 
 abstract type AbstractSeries end
 # expects get_coeff(series, i) to be defined
 
+# Overloads [] operator
+function getindex(series::AbstractSeries, n)
+    return get_coeff(series, n)
+end
+
 function first_coeffs(series::AbstractSeries, n)
-	return [get_coeff(series, i) for i in 0:n]
+    return [series[i] for i in 0:n]
 end
 
-function polyn_head(series::AbstractSeries, d)
-	return sum(first_coeffs(series, d) .* [Symbolics.variable(:t)^i for i in 0:d]; init=0)
+function first_nonzero_index(series::AbstractSeries; limit=1000)
+    for i in 0:limit
+        if series[i] != 0
+            return i
+        end
+    end
+    return nothing
 end
 
-function print_series(io::IO, s::AbstractSeries, deg::Int)
-	print(io, "\$\$" * latexify(polyn_head(s, deg)) * "+ o(t^{$deg}) \$\$")
+# Cached series
+
+abstract type CacheSeries <: AbstractSeries end
+# expects compute_coeff(series, i) to be defined
+
+function get_coeff(series::CacheSeries, index)
+	while length(series.cache) < index + 1
+		push!(series.cache, compute_coeff(series, length(series.cache)))
+	end
+	return series.cache[index + 1]
 end
 
-function show(io::IO, m::MIME"text/latex", s::AbstractSeries)
-	print_series(io, s, 5)
-end
-
-# Generic series
-
-struct GenericSeries <: AbstractSeries
-	symbol::Symbol
-end
-
-function get_coeff(series::GenericSeries, deg)
-	if (deg == 0) return 1 end
-	return Symbolics.variable(series.symbol, deg)
-end
+######################
+# BASIC SERIES
+######################
 
 # Finite series
 
@@ -45,97 +55,21 @@ struct FiniteSeries <: AbstractSeries
 end
 
 function get_coeff(series::FiniteSeries, index)
-	if index + 1 > length(series.coeffs)
+    if index < 0 || index + 1 > length(series.coeffs)
 		return 0
 	else
 		return series.coeffs[index + 1]
 	end
 end
 
-# Polynomial series
-
-struct PolynomialSeries <: AbstractSeries
-	coeffs
-	var
-	PolynomialSeries(polyn, var) = new(Symbolics.polynomial_coeffs(polyn, [var])[1], var)
-end
-
-function get_coeff(s::PolynomialSeries, i)
-	return get(s.coeffs, s.var^i, 0)
-end
-
-# Shift left
-
-struct ShiftLeftSeries <: AbstractSeries
-	series::AbstractSeries
-	shift::Int
-end
-
-function get_coeff(s::ShiftLeftSeries, i)
-	return get_coeff(s.series, i + s.shift)
-end
-
-function <<(s::AbstractSeries, i::Int)
-	return ShiftLeftSeries(s, i)
-end
-
-
-# Additive inverse series
-
-struct MinusSeries <: AbstractSeries
-	orig::AbstractSeries
-end
-
-function get_coeff(s::MinusSeries, index)
-	return -get_coeff(s.orig, index)
-end
-
-function -(s::AbstractSeries)
-	return MinusSeries(s)
-end
-
-# Addition of two series
-
-struct AddSeries <: AbstractSeries
-	a::AbstractSeries
-	b::AbstractSeries
-end
-
-function get_coeff(s::AddSeries, index)
-	return get_coeff(s.a, index) + get_coeff(s.b, index)
-end
-
-function +(a::AbstractSeries, b::AbstractSeries)
-	return AddSeries(a, b)
-end
-
-function -(a::AbstractSeries, b::AbstractSeries)
-	return AddSeries(a, MinusSeries(b))
-end
-
 # Geometric series
 
-struct PowerSeries <: AbstractSeries
-	a
+struct GeometricSeries <: AbstractSeries
+	elem
 end
 
-function get_coeff(series::PowerSeries, deg)
-	return series.a^deg
-end
-
-# Element-wise multiplication
-
-struct ElemMultSeries <: AbstractSeries
-	a::AbstractSeries
-	b::AbstractSeries
-end
-
-function get_coeff(series::ElemMultSeries, deg)
-	return get_coeff(series.a, deg) * get_coeff(series.b, deg)
-end
-
-function ∘(a::AbstractSeries, b::AbstractSeries)
-	return ElemMultSeries(a, b)
+function get_coeff(series::GeometricSeries, deg)
+	return series.elem^deg
 end
 
 # Binomial series
@@ -152,62 +86,189 @@ function binomial(x::Number, k::Integer)
 end
 
 function get_coeff(series::BinomialSeries, deg)
-	return binomial(series.power, deg)# * series.a^(series.power - deg) * series.b^deg 
+	return binomial(series.power, deg)
 end
 
-# Cached series
+# Exponential series
+# series exp(t) around t=0
 
-abstract type CacheSeries <: AbstractSeries end
-# expects compute_coeff(series, i) to be defined
+struct ExpSeries <: AbstractSeries
+end
 
-function get_coeff(series::CacheSeries, index)
-	while length(series.cache) < index + 1
-		push!(series.cache, compute_coeff(series, length(series.cache)))
+function get_coeff(series::ExpSeries, deg)
+	return 1//factorial(deg)
+end
+
+# Log series
+# series of log(1 + t) around t = 0
+
+struct LogSeries <: AbstractSeries
+end
+
+function get_coeff(series::LogSeries, deg)
+	if deg % 2 == 0
+		return 1//deg
+	else
+		return -1//deg
 	end
-	return series.cache[index + 1]
 end
 
-# Inverse series
+####################
+# OPERATIONS
+####################
 
-struct InverseSeries <: CacheSeries
+
+# Shift left
+
+struct ShiftLeft <: AbstractSeries
+	series::AbstractSeries
+	shift::Int
+end
+
+function get_coeff(s::ShiftLeft, i)
+    return s.series[i + s.shift]
+end
+
+function <<(s::AbstractSeries, i::Int)
+	return ShiftLeft(s, i)
+end
+
+# Shift right
+
+struct ShiftRight <: AbstractSeries
+    series::AbstractSeries
+    shift::Int
+end
+
+function get_coeff(s::ShiftRight, i)
+    return s.series[i - s.shift]
+end
+
+function >>(s::AbstractSeries, i::Int)
+	return ShiftRight(s, i)
+end
+
+# Additive inverse series
+
+struct Negative <: AbstractSeries
 	orig::AbstractSeries
-	cache::Vector
-	InverseSeries(orig) = new(orig, [])
 end
 
-function compute_coeff(series::InverseSeries, index)
-	if index == 0
-		return 1//get_coeff(series.orig, 0)
-	end
-	d = index - 1
-	p = polyn_head(series.orig, d + 1)
-	q = polyn_head(series, d)
-	r = expand(p * q)
-	return -expand(Symbolics.coeff(r, Symbolics.variable(:t)^index)//get_coeff(series.orig, 0))
+function get_coeff(s::Negative, index)
+    return -s.orig[index]
+end
+
+function -(s::AbstractSeries)
+	return Negative(s)
+end
+
+# Addition of two series
+
+struct Add <: AbstractSeries
+	a::AbstractSeries
+	b::AbstractSeries
+end
+
+function get_coeff(s::Add, index)
+    return s.a[index] + s.b[index]
+end
+
+function +(a::AbstractSeries, b::AbstractSeries)
+	return Add(a, b)
+end
+
+function -(a::AbstractSeries, b::AbstractSeries)
+	return a + (-b)
 end
 
 # Multiplication series
 
-struct MultSeries <: CacheSeries
+struct Mult <: CacheSeries
+	cache::Vector
+
 	a::AbstractSeries
 	b::AbstractSeries
-	cache::Vector
-	MultSeries(a, b) = new(a, b, [])
+    Mult(a, b) = new([], a, b)
 end
 
-function compute_coeff(series::MultSeries, d)
-	p = polyn_head(series.a, d)
-	q = polyn_head(series.b, d)
-	r = expand(p*q)
-	return expand(Symbolics.coeff(r, Symbolics.variable(:t)^d))
+# Open question: does it actually make sense to cache computations here?
+
+function compute_coeff(series::Mult, d)
+    result = 0
+    for k in 0:d
+        result += series.a[k] * series.b[d-k]
+    end
+    return expand(result)
 end
 
 function *(a::AbstractSeries, b::AbstractSeries)
-	return MultSeries(a, b)
+	return Mult(a, b)
+end
+
+# Multiplication by a constant
+
+struct MultConst <: AbstractSeries
+    a::AbstractSeries
+    b
+end
+
+function get_coeff(series::MultConst, index)
+    return series.a[index] * series.b
+end
+
+*(a::T, b::AbstractSeries) where T <: Number = MultConst(b, a)
+*(a::AbstractSeries, b::T) where T <: Number = MultConst(a, b)
+
+
+# Hadamard product (element-wise multiplication)
+
+struct ElemMult <: AbstractSeries
+	a::AbstractSeries
+	b::AbstractSeries
+end
+
+function get_coeff(series::ElemMult, index)
+    return series.a[index] * series.b[index]
+end
+
+function ⊙(a::AbstractSeries, b::AbstractSeries)
+	return ElemMult(a, b)
+end
+
+# Division of series (requires invertible constant coefficient)
+
+struct Div <: CacheSeries
+    cache::Vector
+
+    a::AbstractSeries
+    b::AbstractSeries
+    Div(a, b) = new([], a, b)
+end
+
+function compute_coeff(series::Div, d)
+    if iszero(series.b[0])
+        error("constant coefficient of divisor is not invertible")
+    end
+
+    if d < 0
+        return 0
+    elseif d == 0
+        return series.a[0] / series.b[0]
+    else
+        s = 0
+        for k in 0:d-1
+            s += series[k] * series.b[d-k]
+        end
+        return expand((series.a[d] - s) / series.b[0])
+    end
 end
 
 function /(a::AbstractSeries, b::AbstractSeries)
-	return MultSeries(a, InverseSeries(b))
+	return Div(a, b)
+end
+
+function inv(a::AbstractSeries)
+    return 1 / a
 end
 
 function ^(a::AbstractSeries, e::Integer)
@@ -216,9 +277,18 @@ function ^(a::AbstractSeries, e::Integer)
 	elseif e > 0
 		return a * (a ^ (e - 1))
 	else
-		inv = InverseSeries(a)
-		return inv ^ (-e)
+		return 1 / a^(-e)
 	end
 end
+
+
+# Promotion rules
+
+/(a::T, b::AbstractSeries) where T <: Number = FiniteSeries([a]) / b
+/(a::AbstractSeries, b::T) where T <: Number = a * inv(b)
++(a::T, b::AbstractSeries) where T <: Number = FiniteSeries([a]) + b
++(a::AbstractSeries, b::T) where T <: Number = a + FiniteSeries([b])
+-(a::T, b::AbstractSeries) where T <: Number = FiniteSeries([a]) - b
+-(a::AbstractSeries, b::T) where T <: Number = a - FiniteSeries([b])
 
 end
