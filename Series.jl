@@ -1,11 +1,13 @@
 module Series
 
 using Symbolics
+import Symbolics: substitute
 using ..SymmetricPolynomials
+import ..SymmetricPolynomials: to_elementary
 
 export FiniteSeries, FuncSeries
 export GeometricSeries, BinomialSeries, ExpSeries, LogSeries
-export SubstituteSeries, SymmetricSeries
+export substitute, to_elementary
 export get_coeff, first_coeffs, first_nonzero_index, ⊙
 
 import Base: +, /, *, ^, -, <<, >>, show, getindex, inv, map
@@ -54,6 +56,7 @@ struct CachedSeries <: AbstractSeries
     cache::Vector
     f
     CachedSeries(f) = new([], f)
+    CachedSeries(s::AbstractSeries) = new([], i -> s[i])
 end
 
 function get_coeff(s::CachedSeries, index)
@@ -96,7 +99,9 @@ ExpSeries(t=1) = FuncSeries(i -> t^i // factorial(i))
 # Log series: log(1 + t) around t=0
 
 LogSeries(t=1) = FuncSeries(function(deg)
-    if deg % 2 == 0
+    if deg == 0
+        return 0
+    elseif deg % 2 == 1
         return (t^deg)//deg
     else
         return -(t^deg)//deg
@@ -109,13 +114,13 @@ map(f, s::AbstractSeries) = FuncSeries(i -> f(s[i]))
 
 # Applies a substitution dictionary to each coefficient
 
-SubstituteSeries(series, dict) = map(x -> expand(substitute(x, dict)), series)
+substitute(series::AbstractSeries, dict) = map(x -> expand(substitute(x, dict)), series)
 
 # Expresses each coefficient as a polynomial in the elementary symmetric
 # polynomials of vars, using sym_name for the output symbols
 
-SymmetricSeries(vars, series, sym_name=:e) =
-    map(x -> symmetric_to_elementary(x, vars; sym_name=sym_name), series)
+to_elementary(series::AbstractSeries, vars; sym=:e) =
+    map(x -> to_elementary(x, vars; sym=sym), series)
 
 ####################
 # OPERATIONS
@@ -147,11 +152,9 @@ SymmetricSeries(vars, series, sym_name=:e) =
 *(a::T, b::AbstractSeries) where T <: Number = FuncSeries(i -> a * b[i])
 *(a::AbstractSeries, b::T) where T <: Number = FuncSeries(i -> a[i] * b)
 
-# Cauchy product of two series (requires caching)
+# Cauchy product of two series
 
-function *(a::AbstractSeries, b::AbstractSeries)
-    CachedSeries(d -> expand(sum(a[k] * b[d-k] for k in 0:d)))
-end
+*(a::AbstractSeries, b::AbstractSeries) = FuncSeries(d -> expand(sum(a[k] * b[d-k] for k in 0:d)))
 
 # Division of series (requires invertible constant term and caching)
 

@@ -13,7 +13,7 @@ module SymmetricPolynomials
 using Symbolics
 using Combinatorics
 
-export elem_sym_polys, symmetric_to_elementary, substitute_elementary
+export elem_sym_polys, to_elementary, substitute_elementary
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
@@ -132,23 +132,23 @@ end
 
 
 """
-    symmetric_to_elementary(f, vars; max_iter=500, sym_name=:e) -> Num
+    to_elementary(f, vars; max_iter=500, sym=:e) -> Num
 
 Express the symmetric polynomial `f` in variables `vars` as a polynomial in the
 elementary symmetric polynomials e₁, …, eₙ.
 
-Returns a Symbolics expression in symbolic proxies `sym_name[1], …, sym_name[n]`,
-where `sym_name[k]` represents eₖ = Σ_{|S|=k} ∏_{i∈S} vars[i].
+Returns a Symbolics expression in symbolic proxies `sym[1], …, sym[n]`,
+where `sym[k]` represents eₖ = Σ_{|S|=k} ∏_{i∈S} vars[i].
 
 # Arguments
 - `f`        – A symmetric polynomial (Symbolics.Num)
 - `vars`     – Vector of symbolic variables w.r.t. which `f` is symmetric
 - `max_iter` – Safety cap on reduction steps (default 500)
-- `sym_name` – Symbol used for the output proxies (default `:e`)
+- `sym` – Symbol used for the output proxies (default `:e`)
 
 # Returns
-`Num` expression in `sym_name[1], …, sym_name[n]`.  To recover `f` in the
-original variables, call `substitute_elementary(result, vars; sym_name)`.
+`Num` expression in `sym[1], …, sym[n]`.  To recover `f` in the
+original variables, call `substitute_elementary(result, vars; sym)`.
 
 # Algorithm  (leading-term cancellation)
 Given the lex-leading monomial c·x^a with a₁ ≥ a₂ ≥ … ≥ aₙ, subtract
@@ -162,31 +162,31 @@ the leading exponent in lex order, guaranteeing termination.
 ```julia
 @variables x y z
 
-# Newton's identity: p₂ = e₁² - 2e₂  (default sym_name)
-symmetric_to_elementary(x^2 + y^2 + z^2, [x, y, z])
+# Newton's identity: p₂ = e₁² - 2e₂  (default sym)
+to_elementary(x^2 + y^2 + z^2, [x, y, z])
 # ⟹  e[1]^2 - 2*e[2]
 
 # Custom symbol σ
-symmetric_to_elementary(x^2 + y^2 + z^2, [x, y, z], sym_name = :σ)
+to_elementary(x^2 + y^2 + z^2, [x, y, z], sym = :σ)
 # ⟹  σ[1]^2 - 2*σ[2]
 
 # e₃ directly
-symmetric_to_elementary(x*y*z, [x, y, z], sym_name = :p)
+to_elementary(x*y*z, [x, y, z], sym = :p)
 # ⟹  p[3]
 
 # Schur polynomial s_{(2,1)}
-symmetric_to_elementary(expand(x^2*y + x^2*z + y^2*x + y^2*z + z^2*x + z^2*y),
+to_elementary(expand(x^2*y + x^2*z + y^2*x + y^2*z + z^2*x + z^2*y),
                          [x, y, z])
 # ⟹  e[1]*e[2] - 3*e[3]
 ```
 """
-function symmetric_to_elementary(f, vars::AbstractVector;
+function to_elementary(f, vars::AbstractVector;
                                   max_iter::Int    = 500,
-                                  sym_name::Symbol = :e)
+                                  sym::Symbol = :e)
     n = length(vars)
 
     e_polys = elem_sym_polys(vars)                        # actual eₖ as polynomials in vars
-    E = Symbolics.variables(sym_name, 1:n)          # symbolic stand-ins for the output
+    E = Symbolics.variables(sym, 1:n)          # symbolic stand-ins for the output
 
     result = zero(Num)
     g      = expand(f)
@@ -230,7 +230,7 @@ function symmetric_to_elementary(f, vars::AbstractVector;
     end
 
     iszero(expand(g)) ||
-        error("symmetric_to_elementary: remainder $g ≠ 0 after $max_iter steps.\n" *
+        error("to_elementary: remainder $g ≠ 0 after $max_iter steps.\n" *
               "Verify that `f` is symmetric in every variable in `vars`.")
 
     return result
@@ -238,20 +238,20 @@ end
 
 
 """
-    substitute_elementary(expr, vars; sym_name=:e) -> Num
+    substitute_elementary(expr, vars; sym=:e) -> Num
 
-Replace the symbolic proxies `sym_name[k]` in `expr` (output of
-`symmetric_to_elementary`) with the actual elementary symmetric polynomials
+Replace the symbolic proxies `sym[k]` in `expr` (output of
+`to_elementary`) with the actual elementary symmetric polynomials
 of `vars`, recovering the original polynomial.
 
-`sym_name` must match the one passed to `symmetric_to_elementary`.
+`sym` must match the one passed to `to_elementary`.
 
 Useful for round-trip verification.
 """
-function substitute_elementary(expr, vars::AbstractVector; sym_name::Symbol = :e)
+function substitute_elementary(expr, vars::AbstractVector; sym::Symbol = :e)
     n       = length(vars)
     e_polys = elem_sym_polys(vars)
-    E       = Symbolics.variables(sym_name, 1:n)
+    E       = Symbolics.variables(sym, 1:n)
     sub     = Dict(E[k] => e_polys[k] for k in 1:n)
     return expand(substitute(expr, sub))
 end
@@ -291,7 +291,7 @@ function demo()
     println("═"^65)
 
     for (label, f) in tests
-        expr = symmetric_to_elementary(f, [x, y, z])
+        expr = to_elementary(f, [x, y, z])
         # Verify round-trip
         recovered = substitute_elementary(expr, [x, y, z])
         ok = isequal(expand(recovered - f), 0) ? "✓" : "✗ MISMATCH"
@@ -304,21 +304,21 @@ function demo()
     println("═"^65)
     @variables a b
     f2 = a^3 + b^3
-    expr2 = symmetric_to_elementary(f2, [a, b])
+    expr2 = to_elementary(f2, [a, b])
     println("\n  f = a³+b³  =  $expr2")
     println("  (= e[1]³ - 3·e[1]·e[2]  ✓)")
 
     println("\n" * "═"^65)
-    println("  Custom sym_name examples")
+    println("  Custom sym examples")
     println("═"^65)
 
     f3 = x^2 + y^2 + z^2
 
     for sym in [:e, :σ, :p, :h]
-        expr = symmetric_to_elementary(f3, [x, y, z]; sym_name = sym)
-        recovered = substitute_elementary(expr, [x, y, z]; sym_name = sym)
+        expr = to_elementary(f3, [x, y, z]; sym = sym)
+        recovered = substitute_elementary(expr, [x, y, z]; sym = sym)
         ok = isequal(expand(recovered - f3), 0) ? "✓" : "✗ MISMATCH"
-        println("\n  sym_name = :$sym  →  $expr  [$ok]")
+        println("\n  sym = :$sym  →  $expr  [$ok]")
     end
 end
 
