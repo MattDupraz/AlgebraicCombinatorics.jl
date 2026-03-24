@@ -15,7 +15,7 @@ using SimplePlutoInclude
 
 # ╔═╡ d8cdba7d-df75-4231-b516-59a5e0cd6a96
 function lambda(p)
-	result = FiniteSeries([1])
+	result = Series(1)
 	for (monom, coeff) in polynomial_coeffs(p, Symbolics.get_variables(p))[1]
 		result *= BinomialSeries(coeff) ⊙ GeometricSeries(monom)
 	end
@@ -57,34 +57,34 @@ lambda((1 - x)*(1 - y))
 D(x) = 1 - x
 
 # ╔═╡ c6e3138a-9f6e-4858-81eb-4c9a0324dbeb
-expand(substitute(get_coeff(lambda(D(x) + D(x)^2//2 + D(x)^3//3 + D(x)^4//4 + D(x)^5//5 + D(x)^6//6 + D(x)^7//7 + D(x)^8//8), 1), Dict(x => 1 -x, y => 1 - y)))
+expand(substitute(lambda(D(x) + D(x)^2//2 + D(x)^3//3 + D(x)^4//4 + D(x)^5//5 + D(x)^6//6 + D(x)^7//7 + D(x)^8//8)[1], Dict(x => 1 -x, y => 1 - y)))
 
 # ╔═╡ b722d699-0ec1-4e0f-8c4b-64a9b2c90d0f
-apply_operator(get_coeff(lambda(-2*D(x) - D(x)^2), 1), x^2 + x + x*y)
+apply_operator(lambda(-2*D(x) - D(x)^2)[1], x^2 + x + x*y)
 
 # ╔═╡ 695f16c9-cd75-41a2-9d3d-9948e5858a19
-expand(substitute(get_coeff(lambda(D(x) - D(y)), 2), Dict(x => 1 - x, y => 1 - y)))
+expand(substitute(lambda(D(x) - D(y))[2], Dict(x => 1 - x, y => 1 - y)))
 
 # ╔═╡ 9a0ce425-00c5-4821-afb4-d51eca70db1f
-apply_operator(get_coeff(lambda(D(x) + D(y)), 1), x-y)
+apply_operator(lambda(D(x) + D(y))[1], x-y)
 
 # ╔═╡ 08a461bb-3feb-4bdf-9e3b-3f07546e1ebf
-expand(substitute(get_coeff(lambda(D(x)^2 + 2*D(y)), 2), Dict(x => 1 - x, y => 1 - y, z=>1-z)))
+expand(substitute(lambda(D(x)^2 + 2*D(y))[2], Dict(x => 1 - x, y => 1 - y, z=>1-z)))
 
 # ╔═╡ 8ad78a55-9e1a-4949-9790-534d69c47531
-apply_operator(get_coeff(lambda(D(x)^2 + 2*D(y)), 1), x^2 + y)
+apply_operator(lambda(D(x)^2 + 2*D(y))[1], x^2 + y)
 
 # ╔═╡ 6c7c678a-e691-4705-bb4f-f20129ee09a0
-expand(substitute(get_coeff(lambda(D(x)^2 - 2*D(y)), 2), Dict(x => 1 - x, y => 1 - y, z=>1-z)))
+expand(substitute(lambda(D(x)^2 - 2*D(y))[2], Dict(x => 1 - x, y => 1 - y, z=>1-z)))
 
 # ╔═╡ b6eec44d-f5ae-4582-af1a-0b2600a1b5d4
-apply_operator(get_coeff(lambda(D(x) + D(y) + D(z)), 3), x + y - 2 * z)
+apply_operator(lambda(D(x) + D(y) + D(z))[3], x + y - 2 * z)
 
 # ╔═╡ ce2abd81-2c0d-485e-a25a-79f78b8807d1
 lambda(-6D(x)-3D(x)^2-1)
 
 # ╔═╡ cb729f7d-fe0a-4dee-a029-3a63fa2aa528
-expand(substitute(get_coeff(lambda(-24D(x)-12D(x)^2-4D(x)^3-D(x)^4), 4), Dict(x => 1 - x, y => 1 - y, z=>1-z)))
+expand(substitute(lambda(-24D(x)-12D(x)^2-4D(x)^3-D(x)^4)[4], Dict(x => 1 - x, y => 1 - y, z=>1-z)))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """

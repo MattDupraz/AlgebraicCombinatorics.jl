@@ -334,14 +334,14 @@ end
 function brion_coefficient(cone::SignedCone{T}, vertex, lambda) where T <: Integer
     A = cone.matrix
     num = BinomialSeries(dot(vertex, lambda))
-    denom = FiniteSeries([1])
+    denom = Series(1)
     for i in 1:size(A, 1)
         ray = A[i, :]
         denom *= 1 - BinomialSeries(dot(ray, lambda))
     end
     offset = first_nonzero_index(denom)
     quot = num / (denom << offset)
-    return cone.sign * get_coeff(quot, offset)
+    return cone.sign * quot[offset]
 end
 
 function get_an_integer_vector(k, dim)

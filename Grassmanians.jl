@@ -31,8 +31,8 @@ n = 4
 T = todd_class_grassmanian(k, n)
 
 # Since [S ⊗ Q] = [O], we know that the product of the chern classes is 1 in the Chow ring
-S_inv = inv(FiniteSeries([1; Symbolics.variables(:s, 1:2)]))
-q_to_s = Dict([Symbolics.variable(:q, i) => get_coeff(S_inv, i) for i in 1:2])
+S_inv = inv(Series([1; Symbolics.variables(:s, 1:2)]))
+q_to_s = Dict([Symbolics.variable(:q, i) => S_inv[i] for i in 1:2])
 
 T = substitute(T, q_to_s)
 

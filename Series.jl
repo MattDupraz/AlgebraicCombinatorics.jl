@@ -1,104 +1,76 @@
 module Series
 
 using Symbolics
-import Symbolics: substitute
 using ..SymmetricPolynomials
 import ..SymmetricPolynomials: to_elementary
+import Symbolics: substitute
 
-export FiniteSeries, FuncSeries
+export Series, cached
 export GeometricSeries, BinomialSeries, ExpSeries, LogSeries
 export substitute, to_elementary
-export get_coeff, first_coeffs, first_nonzero_index, ⊙
+export first_coeffs, first_nonzero_index, ⊙
 
 import Base: +, /, *, ^, -, <<, >>, show, getindex, inv, map
 
 #####################
-# ABSTRACT TYPE
+# SERIES TYPE
 #####################
 
-abstract type AbstractSeries end
-# expects get_coeff(series, i) to be defined
+# A series is a function ℕ → value
 
-function getindex(series::AbstractSeries, n)
-    return get_coeff(series, n)
+struct Series
+    f::Function
+    Series(f::Function)            = new(f)
+    Series(coeffs::AbstractVector) = new(i -> (i < 0 || i + 1 > length(coeffs)) ? 0 : coeffs[i + 1])
+    Series(coeffs::Number...)      = new(i -> (i < 0 || i + 1 > length(coeffs)) ? 0 : coeffs[i + 1])
 end
 
-function first_coeffs(series::AbstractSeries, n)
-    return [series[i] for i in 0:n]
+getindex(s::Series, i) = s.f(i)
+
+function first_coeffs(s::Series, n)
+    return [s[i] for i in 0:n]
 end
 
-function first_nonzero_index(series::AbstractSeries; limit=1000)
+function first_nonzero_index(s::Series; limit=1000)
     for i in 0:limit
-        if series[i] != 0
-            return i
-        end
+        s[i] != 0 && return i
     end
     return nothing
 end
 
-######################
-# CONCRETE TYPES
-######################
+# Returns a memoized version of a series or function
 
-# A series defined by a function ℕ → value
-
-struct FuncSeries <: AbstractSeries
-    f
+function cached(f::Function)
+    cache = []
+    Series(function(i)
+        while length(cache) < i + 1
+            push!(cache, f(length(cache)))
+        end
+        return cache[i + 1]
+    end)
 end
 
-function get_coeff(s::FuncSeries, index)
-    return s.f(index)
-end
-
-# A series defined by a function ℕ → value, with memoization
-
-struct CachedSeries <: AbstractSeries
-    cache::Vector
-    f
-    CachedSeries(f) = new([], f)
-    CachedSeries(s::AbstractSeries) = new([], i -> s[i])
-end
-
-function get_coeff(s::CachedSeries, index)
-    while length(s.cache) < index + 1
-        push!(s.cache, s.f(length(s.cache)))
-    end
-    return s.cache[index + 1]
-end
-
-# A series defined by a finite list of coefficients
-
-struct FiniteSeries <: AbstractSeries
-    coeffs::Vector
-end
-
-function get_coeff(series::FiniteSeries, index)
-    if index < 0 || index + 1 > length(series.coeffs)
-        return 0
-    else
-        return series.coeffs[index + 1]
-    end
-end
+cached(s::Series) = cached(i -> s[i])
 
 ######################
-# BASIC SERIES
+# NAMED SERIES
 ######################
 
 # Geometric series: elem^i
 
-GeometricSeries(elem) = FuncSeries(i -> elem^i)
+GeometricSeries(elem) = Series(i -> elem^i)
 
 # Binomial series: coefficients of (1 + t)^x
 
-BinomialSeries(x) = FuncSeries(i -> i == 0 ? oneunit(x)//1 : prod(j -> (x-j+1)//j, 1:i))
+BinomialSeries(x) = Series(i -> i == 0 ? oneunit(x)//1 : prod(j -> (x-j+1)//j, 1:i))
 
 # Exponential series: exp(t) around t=0
 
-ExpSeries(t=1) = FuncSeries(i -> t^i // factorial(i))
+ExpSeries(t=1) = Series(i -> t^i // factorial(i))
 
 # Log series: log(1 + t) around t=0
 
-LogSeries(t=1) = FuncSeries(function(deg)
+LogSeries(t=1) = Series(function(deg)
     if deg == 0
         return 0
     elseif deg % 2 == 1
@@ -108,60 +80,60 @@ LogSeries(t=1) = FuncSeries(function(deg)
     end
 end)
 
-# Applies a function to each coefficient of a series
-
-map(f, s::AbstractSeries) = FuncSeries(i -> f(s[i]))
-
-# Applies a substitution dictionary to each coefficient
-
-substitute(series::AbstractSeries, dict) = map(x -> expand(substitute(x, dict)), series)
-
-# Expresses each coefficient as a polynomial in the elementary symmetric
-# polynomials of vars, using sym_name for the output symbols
-
-to_elementary(series::AbstractSeries, vars; sym=:e) =
-    map(x -> to_elementary(x, vars; sym=sym), series)
-
 ####################
 # OPERATIONS
 ####################
 
+# Applies a function to each coefficient
+
+map(f, s::Series) = Series(i -> f(s[i]))
+
+# Applies a substitution dictionary to each coefficient
+
+substitute(s::Series, dict) = map(x -> expand(substitute(x, dict)), s)
+
+# Expresses each coefficient as a polynomial in the elementary symmetric
+# polynomials of vars, using sym for the output symbols
+
+to_elementary(s::Series, vars; sym=:e) =
+    map(x -> to_elementary(x, vars; sym=sym), s)
+
 # Shift left
 
-<<(s::AbstractSeries, n::Int) = FuncSeries(i -> s[i + n])
+<<(s::Series, n::Int) = Series(i -> s[i + n])
 
 # Shift right
 
->>(s::AbstractSeries, n::Int) = FuncSeries(i -> s[i - n])
+>>(s::Series, n::Int) = Series(i -> s[i - n])
 
 # Additive inverse
 
--(s::AbstractSeries) = FuncSeries(i -> -s[i])
+-(s::Series) = Series(i -> -s[i])
 
 # Addition
 
-+(a::AbstractSeries, b::AbstractSeries) = FuncSeries(i -> a[i] + b[i])
--(a::AbstractSeries, b::AbstractSeries) = FuncSeries(i -> a[i] - b[i])
++(a::Series, b::Series) = Series(i -> a[i] + b[i])
+-(a::Series, b::Series) = Series(i -> a[i] - b[i])
 
 # Hadamard product (element-wise multiplication)
 
-⊙(a::AbstractSeries, b::AbstractSeries) = FuncSeries(i -> a[i] * b[i])
+⊙(a::Series, b::Series) = Series(i -> a[i] * b[i])
 
 # Multiplication by a constant
 
-*(a::T, b::AbstractSeries) where T <: Number = FuncSeries(i -> a * b[i])
-*(a::AbstractSeries, b::T) where T <: Number = FuncSeries(i -> a[i] * b)
+*(a::Number, b::Series) = Series(i -> a * b[i])
+*(a::Series, b::Number) = Series(i -> a[i] * b)
 
 # Cauchy product of two series
 
-*(a::AbstractSeries, b::AbstractSeries) = FuncSeries(d -> expand(sum(a[k] * b[d-k] for k in 0:d)))
+*(a::Series, b::Series) = Series(d -> expand(sum(a[k] * b[d-k] for k in 0:d)))
 
-# Division of series (requires invertible constant term and caching)
+# Division of series (requires invertible constant term)
 
-function /(a::AbstractSeries, b::AbstractSeries)
+function /(a::Series, b::Series)
     iszero(b[0]) && error("constant coefficient of divisor is not invertible")
-    ref = Ref{CachedSeries}()
-    ref[] = CachedSeries(function(d)
+    ref = Ref{Series}()
+    ref[] = cached(function(d)
         d == 0 && return a[0] / b[0]
         s = sum(ref[][k] * b[d-k] for k in 0:d-1; init=zero(Num))
         return expand((a[d] - s) / b[0])
@@ -169,15 +141,13 @@ function /(a::AbstractSeries, b::AbstractSeries)
     return ref[]
 end
 
-function inv(a::AbstractSeries)
-    return 1 / a
-end
+inv(a::Series) = 1 / a
 
-# Exponentiation of series
+# Exponentiation
 
-function ^(a::AbstractSeries, e::Integer)
+function ^(a::Series, e::Integer)
     if e == 0
-        return FiniteSeries([1])
+        return Series(1)
     elseif e > 0
         return a * (a ^ (e - 1))
     else
@@ -187,11 +157,11 @@ end
 
 # Promotion rules
 
-/(a::T, b::AbstractSeries) where T <: Number = FiniteSeries([a]) / b
-/(a::AbstractSeries, b::T) where T <: Number = a * inv(b)
-+(a::T, b::AbstractSeries) where T <: Number = FiniteSeries([a]) + b
-+(a::AbstractSeries, b::T) where T <: Number = a + FiniteSeries([b])
--(a::T, b::AbstractSeries) where T <: Number = FiniteSeries([a]) - b
--(a::AbstractSeries, b::T) where T <: Number = a - FiniteSeries([b])
+/(a::Number, b::Series) = Series(a) / b
+/(a::Series, b::Number) = a * inv(b)
++(a::Number, b::Series) = Series(a) + b
++(a::Series, b::Number) = a + Series(b)
+-(a::Number, b::Series) = Series(a) - b
+-(a::Series, b::Number) = a - Series(b)
 
 end
