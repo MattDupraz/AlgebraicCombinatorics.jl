@@ -10,7 +10,7 @@ export GeometricSeries, BinomialSeries, ExpSeries, LogSeries
 export substitute, to_elementary
 export first_coeffs, first_nonzero_index, ⊙
 
-import Base: +, /, *, ^, -, <<, >>, show, getindex, inv, map
+import Base: +, /, *, ^, -, <<, >>, show, getindex, inv, map, ∘
 
 #####################
 # SERIES TYPE
@@ -126,7 +126,7 @@ to_elementary(s::Series, vars; sym=:e) =
 
 # Cauchy product of two series
 
-*(a::Series, b::Series) = Series(d -> expand(sum(a[k] * b[d-k] for k in 0:d)))
+*(a::Series, b::Series) = cached(d -> expand(sum(a[k] * b[d-k] for k in 0:d)))
 
 # Division of series (requires invertible constant term)
 
@@ -153,6 +153,19 @@ function ^(a::Series, e::Integer)
     else
         return 1 / a^(-e)
     end
+end
+
+# Composition a ∘ b: substitute b(t) into a, requires b[0] = 0
+
+function ∘(a::Series, b::Series)
+    iszero(b[0]) || error("constant term of inner series must be 0 for composition")
+    b_powers = [Series(1)]  # b_powers[i+1] = b^i
+    cached(function(n)
+        while length(b_powers) <= n
+            push!(b_powers, b_powers[end] * b)
+        end
+        sum(a[i] * b_powers[i + 1][n] for i in 0:n)
+    end)
 end
 
 # Promotion rules
