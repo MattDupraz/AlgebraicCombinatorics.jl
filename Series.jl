@@ -3,7 +3,8 @@ module Series
 using Symbolics
 using ..SymmetricPolynomials
 
-export FiniteSeries, GeometricSeries, BinomialSeries, ExpSeries, LogSeries, SymmetricSeries
+export FiniteSeries, GeometricSeries, BinomialSeries, ExpSeries, LogSeries
+export MapSeries, SubstituteSeries, SymmetricSeries
 export get_coeff, first_coeffs, first_nonzero_index, ⊙
 
 import Base: +, /, *, ^, -, <<, >>, show, getindex, inv
@@ -121,20 +122,31 @@ function get_coeff(series::LogSeries, deg)
 end
 
 ####################
-# SYMMETRIC SERIES
+# MAP SERIES
 ####################
 
-# Applies symmetric_to_elementary to each coefficient of a series
+# Applies a function to each coefficient of a series
 
-struct SymmetricSeries <: AbstractSeries
-    vars::AbstractVector
+struct MapSeries <: AbstractSeries
     series::AbstractSeries
-    sym_name::Symbol
-    SymmetricSeries(vars, series, sym_name=:e) = new(vars, series, sym_name)
+    f
 end
 
-function get_coeff(s::SymmetricSeries, index)
-    return symmetric_to_elementary(s.series[index], s.vars; sym_name=s.sym_name)
+function get_coeff(s::MapSeries, index)
+    return s.f(s.series[index])
+end
+
+# Applies a substitution dictionary to each coefficient
+
+function SubstituteSeries(series, dict)
+    MapSeries(series, x -> expand(substitute(x, dict)))
+end
+
+# Expresses each coefficient as a polynomial in the elementary symmetric
+# polynomials of vars, using sym_name for the output symbols
+
+function SymmetricSeries(vars, series, sym_name=:e)
+    MapSeries(series, x -> symmetric_to_elementary(x, vars; sym_name=sym_name))
 end
 
 ####################
