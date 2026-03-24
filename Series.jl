@@ -1,16 +1,8 @@
-module Series
-
 using Symbolics
-using ..SymmetricPolynomials
-import ..SymmetricPolynomials: to_elementary
 import Symbolics: substitute
 
-export Series, cached
-export GeometricSeries, BinomialSeries, ExpSeries, LogSeries
-export substitute, to_elementary
-export first_coeffs, first_nonzero_index, ⊙
-
 import Base: +, /, *, ^, -, <<, >>, show, getindex, inv, map, ∘
+
 
 #####################
 # SERIES TYPE
@@ -176,5 +168,3 @@ end
 +(a::Series, b::Number) = a + Series(b)
 -(a::Number, b::Series) = Series(a) - b
 -(a::Series, b::Number) = a - Series(b)
-
-end

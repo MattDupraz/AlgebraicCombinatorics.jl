@@ -1,13 +1,5 @@
-module LinAlgTools
-
-using ..Series
 using LinearAlgebra, DataStructures
 using Base.Iterators
-
-export gram_schmidt, lll_reduction, shortest_vector_approximation, extract_basis,
-    row_space_basis, orthogonal_complement, hermite_normal_form, lattice_basis_inside_span,
-    barvinok_decomposition, simplicial_cone_dual, compute_lattice_count
-export SignedCone
 
 function gram_schmidt(B::AbstractMatrix{T}) where T
     m, n = size(B)
@@ -392,7 +384,5 @@ function polytope_lattice_count(vertices)
         push!(cones, [r1' ; r2'])
     end
     return compute_lattice_count(cones, vertices)
-end
-
 end
 

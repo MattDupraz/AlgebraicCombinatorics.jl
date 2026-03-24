@@ -1,9 +1,7 @@
 using Symbolics
 
 include("SymmetricPolynomials.jl")
-
 include("Series.jl")
-using .Series
 
 
 ToddSeries() = inv((1 - ExpSeries(-1)) << 1)
