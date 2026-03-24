@@ -1,8 +1,9 @@
 module Series
 
 using Symbolics
+using ..SymmetricPolynomials
 
-export FiniteSeries, GeometricSeries, BinomialSeries, ExpSeries, LogSeries
+export FiniteSeries, GeometricSeries, BinomialSeries, ExpSeries, LogSeries, SymmetricSeries
 export get_coeff, first_coeffs, first_nonzero_index, ⊙
 
 import Base: +, /, *, ^, -, <<, >>, show, getindex, inv
@@ -117,6 +118,23 @@ function get_coeff(series::LogSeries, deg)
 	else
 		return -(series.t^deg)//deg
 	end
+end
+
+####################
+# SYMMETRIC SERIES
+####################
+
+# Applies symmetric_to_elementary to each coefficient of a series
+
+struct SymmetricSeries <: AbstractSeries
+    vars::AbstractVector
+    series::AbstractSeries
+    sym_name::Symbol
+    SymmetricSeries(vars, series, sym_name=:e) = new(vars, series, sym_name)
+end
+
+function get_coeff(s::SymmetricSeries, index)
+    return symmetric_to_elementary(s.series[index], s.vars; sym_name=s.sym_name)
 end
 
 ####################

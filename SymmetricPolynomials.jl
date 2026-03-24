@@ -1,5 +1,5 @@
 """
-    symmetric_poly.jl
+    SymmetricPolynomials
 
 Express a symmetric polynomial as a polynomial in the elementary symmetric
 polynomials e₁, e₂, …, eₙ using the classical leading-term cancellation
@@ -8,9 +8,12 @@ algorithm (fundamental theorem of symmetric polynomials).
 Dependencies:
     julia> using Pkg; Pkg.add(["Symbolics", "Combinatorics"])
 """
+module SymmetricPolynomials
 
 using Symbolics
 using Combinatorics
+
+export elem_sym_polys, symmetric_to_elementary, substitute_elementary
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
@@ -183,7 +186,7 @@ function symmetric_to_elementary(f, vars::AbstractVector;
     n = length(vars)
 
     e_polys = elem_sym_polys(vars)                        # actual eₖ as polynomials in vars
-    E = collect(only(@variables $sym_name[1:n]))          # symbolic stand-ins for the output
+    E = Symbolics.variables(sym_name, 1:n)          # symbolic stand-ins for the output
 
     result = zero(Num)
     g      = expand(f)
@@ -248,7 +251,7 @@ Useful for round-trip verification.
 function substitute_elementary(expr, vars::AbstractVector; sym_name::Symbol = :e)
     n       = length(vars)
     e_polys = elem_sym_polys(vars)
-    E       = collect(only(@variables $sym_name[1:n]))
+    E       = Symbolics.variables(sym_name, 1:n)
     sub     = Dict(E[k] => e_polys[k] for k in 1:n)
     return expand(substitute(expr, sub))
 end
@@ -319,4 +322,4 @@ function demo()
     end
 end
 
-demo()
+end

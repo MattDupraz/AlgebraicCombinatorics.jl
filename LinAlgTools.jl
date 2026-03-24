@@ -1,8 +1,6 @@
 module LinAlgTools
 
-include("Series.jl")
-using .Series
-
+using ..Series
 using LinearAlgebra, DataStructures
 using Base.Iterators
 
