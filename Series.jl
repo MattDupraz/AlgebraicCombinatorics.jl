@@ -5,7 +5,7 @@ using ..SymmetricPolynomials
 
 export FiniteSeries, FuncSeries
 export GeometricSeries, BinomialSeries, ExpSeries, LogSeries
-export MapSeries, SubstituteSeries, SymmetricSeries
+export SubstituteSeries, SymmetricSeries
 export get_coeff, first_coeffs, first_nonzero_index, ⊙
 
 import Base: +, /, *, ^, -, <<, >>, show, getindex, inv, map
@@ -103,15 +103,9 @@ LogSeries(t=1) = FuncSeries(function(deg)
     end
 end)
 
-####################
-# MAP SERIES
-####################
+# Applies a function to each coefficient of a series
 
-# Applies a function (coeff, index) → value to each coefficient
-
-MapSeries(series, f) = FuncSeries(i -> f(series[i], i))
-
-map(f, s::AbstractSeries) = MapSeries(s, (x, _) -> f(x))
+map(f, s::AbstractSeries) = FuncSeries(i -> f(s[i]))
 
 # Applies a substitution dictionary to each coefficient
 
