@@ -3,20 +3,20 @@ module Series
 using Symbolics
 using ..SymmetricPolynomials
 
-export FiniteSeries, GeometricSeries, BinomialSeries, ExpSeries, LogSeries
+export FiniteSeries, FuncSeries
+export GeometricSeries, BinomialSeries, ExpSeries, LogSeries
 export MapSeries, SubstituteSeries, SymmetricSeries
 export get_coeff, first_coeffs, first_nonzero_index, ⊙
 
-import Base: +, /, *, ^, -, <<, >>, show, getindex, inv
+import Base: +, /, *, ^, -, <<, >>, show, getindex, inv, map
 
 #####################
-# ABSTRACT TYPES
+# ABSTRACT TYPE
 #####################
 
 abstract type AbstractSeries end
 # expects get_coeff(series, i) to be defined
 
-# Overloads [] operator
 function getindex(series::AbstractSeries, n)
     return get_coeff(series, n)
 end
@@ -34,289 +34,159 @@ function first_nonzero_index(series::AbstractSeries; limit=1000)
     return nothing
 end
 
-# Cached series
+######################
+# CONCRETE TYPES
+######################
 
-abstract type CacheSeries <: AbstractSeries end
-# expects compute_coeff(series, i) to be defined
+# A series defined by a function ℕ → value
 
-function get_coeff(series::CacheSeries, index)
-	while length(series.cache) < index + 1
-		push!(series.cache, compute_coeff(series, length(series.cache)))
-	end
-	return series.cache[index + 1]
+struct FuncSeries <: AbstractSeries
+    f
+end
+
+function get_coeff(s::FuncSeries, index)
+    return s.f(index)
+end
+
+# A series defined by a function ℕ → value, with memoization
+
+struct CachedSeries <: AbstractSeries
+    cache::Vector
+    f
+    CachedSeries(f) = new([], f)
+end
+
+function get_coeff(s::CachedSeries, index)
+    while length(s.cache) < index + 1
+        push!(s.cache, s.f(length(s.cache)))
+    end
+    return s.cache[index + 1]
+end
+
+# A series defined by a finite list of coefficients
+
+struct FiniteSeries <: AbstractSeries
+    coeffs::Vector
+end
+
+function get_coeff(series::FiniteSeries, index)
+    if index < 0 || index + 1 > length(series.coeffs)
+        return 0
+    else
+        return series.coeffs[index + 1]
+    end
 end
 
 ######################
 # BASIC SERIES
 ######################
 
-# Finite series
+# Geometric series: elem^i
 
-struct FiniteSeries <: AbstractSeries
-	coeffs::Vector
-end
+GeometricSeries(elem) = FuncSeries(i -> elem^i)
 
-function get_coeff(series::FiniteSeries, index)
-    if index < 0 || index + 1 > length(series.coeffs)
-		return 0
-	else
-		return series.coeffs[index + 1]
-	end
-end
+# Binomial series: coefficients of (1 + t)^x
 
-# Geometric series
+BinomialSeries(x) = FuncSeries(i -> i == 0 ? oneunit(x)//1 : prod(j -> (x-j+1)//j, 1:i))
 
-struct GeometricSeries <: AbstractSeries
-	elem
-end
+# Exponential series: exp(t) around t=0
 
-function get_coeff(series::GeometricSeries, deg)
-	return series.elem^deg
-end
+ExpSeries(t=1) = FuncSeries(i -> t^i // factorial(i))
 
-# Binomial series
-# series (1 + t)^power
+# Log series: log(1 + t) around t=0
 
-struct BinomialSeries <: AbstractSeries
-	power
-end
-
-function binomial(x::Number, k::Integer)
-    k < 0 && throw(DomainError("k=$k must be non-negative"))
-    k == 0 && return oneunit(x)//one(k)
-    return prod(i -> (x-i+1)//i, 1:k)
-end
-
-function get_coeff(series::BinomialSeries, deg)
-	return binomial(series.power, deg)
-end
-
-# Exponential series
-# series exp(t) around t=0
-
-struct ExpSeries <: AbstractSeries
-    t
-    ExpSeries(t) = new(t)
-    ExpSeries() = new(1)
-end
-
-function get_coeff(series::ExpSeries, deg)
-    return (series.t^deg)//factorial(deg)
-end
-
-# Log series
-# series of log(1 + t) around t = 0
-
-struct LogSeries <: AbstractSeries
-    t
-    LogSeries(t) = new(t)
-    LogSeries() = new(1)
-end
-
-function get_coeff(series::LogSeries, deg)
-	if deg % 2 == 0
-        return (series.t^deg)//deg
-	else
-		return -(series.t^deg)//deg
-	end
-end
+LogSeries(t=1) = FuncSeries(function(deg)
+    if deg % 2 == 0
+        return (t^deg)//deg
+    else
+        return -(t^deg)//deg
+    end
+end)
 
 ####################
 # MAP SERIES
 ####################
 
-# Applies a function to each coefficient of a series
+# Applies a function (coeff, index) → value to each coefficient
 
-struct MapSeries <: AbstractSeries
-    series::AbstractSeries
-    f
-end
+MapSeries(series, f) = FuncSeries(i -> f(series[i], i))
 
-function get_coeff(s::MapSeries, index)
-    return s.f(s.series[index])
-end
+map(f, s::AbstractSeries) = MapSeries(s, (x, _) -> f(x))
 
 # Applies a substitution dictionary to each coefficient
 
-function SubstituteSeries(series, dict)
-    MapSeries(series, x -> expand(substitute(x, dict)))
-end
+SubstituteSeries(series, dict) = map(x -> expand(substitute(x, dict)), series)
 
 # Expresses each coefficient as a polynomial in the elementary symmetric
 # polynomials of vars, using sym_name for the output symbols
 
-function SymmetricSeries(vars, series, sym_name=:e)
-    MapSeries(series, x -> symmetric_to_elementary(x, vars; sym_name=sym_name))
-end
+SymmetricSeries(vars, series, sym_name=:e) =
+    map(x -> symmetric_to_elementary(x, vars; sym_name=sym_name), series)
 
 ####################
 # OPERATIONS
 ####################
 
-
 # Shift left
 
-struct ShiftLeft <: AbstractSeries
-	series::AbstractSeries
-	shift::Int
-end
-
-function get_coeff(s::ShiftLeft, i)
-    return s.series[i + s.shift]
-end
-
-function <<(s::AbstractSeries, i::Int)
-	return ShiftLeft(s, i)
-end
+<<(s::AbstractSeries, n::Int) = FuncSeries(i -> s[i + n])
 
 # Shift right
 
-struct ShiftRight <: AbstractSeries
-    series::AbstractSeries
-    shift::Int
-end
+>>(s::AbstractSeries, n::Int) = FuncSeries(i -> s[i - n])
 
-function get_coeff(s::ShiftRight, i)
-    return s.series[i - s.shift]
-end
+# Additive inverse
 
-function >>(s::AbstractSeries, i::Int)
-	return ShiftRight(s, i)
-end
+-(s::AbstractSeries) = FuncSeries(i -> -s[i])
 
-# Additive inverse series
+# Addition
 
-struct Negative <: AbstractSeries
-	orig::AbstractSeries
-end
-
-function get_coeff(s::Negative, index)
-    return -s.orig[index]
-end
-
-function -(s::AbstractSeries)
-	return Negative(s)
-end
-
-# Addition of two series
-
-struct Add <: AbstractSeries
-	a::AbstractSeries
-	b::AbstractSeries
-end
-
-function get_coeff(s::Add, index)
-    return s.a[index] + s.b[index]
-end
-
-function +(a::AbstractSeries, b::AbstractSeries)
-	return Add(a, b)
-end
-
-function -(a::AbstractSeries, b::AbstractSeries)
-	return a + (-b)
-end
-
-# Multiplication series
-
-struct Mult <: CacheSeries
-	cache::Vector
-
-	a::AbstractSeries
-	b::AbstractSeries
-    Mult(a, b) = new([], a, b)
-end
-
-# Open question: does it actually make sense to cache computations here?
-
-function compute_coeff(series::Mult, d)
-    result = 0
-    for k in 0:d
-        result += series.a[k] * series.b[d-k]
-    end
-    return expand(result)
-end
-
-function *(a::AbstractSeries, b::AbstractSeries)
-	return Mult(a, b)
-end
-
-# Multiplication by a constant
-
-struct MultConst <: AbstractSeries
-    a::AbstractSeries
-    b
-end
-
-function get_coeff(series::MultConst, index)
-    return series.a[index] * series.b
-end
-
-*(a::T, b::AbstractSeries) where T <: Number = MultConst(b, a)
-*(a::AbstractSeries, b::T) where T <: Number = MultConst(a, b)
-
++(a::AbstractSeries, b::AbstractSeries) = FuncSeries(i -> a[i] + b[i])
+-(a::AbstractSeries, b::AbstractSeries) = FuncSeries(i -> a[i] - b[i])
 
 # Hadamard product (element-wise multiplication)
 
-struct ElemMult <: AbstractSeries
-	a::AbstractSeries
-	b::AbstractSeries
+⊙(a::AbstractSeries, b::AbstractSeries) = FuncSeries(i -> a[i] * b[i])
+
+# Multiplication by a constant
+
+*(a::T, b::AbstractSeries) where T <: Number = FuncSeries(i -> a * b[i])
+*(a::AbstractSeries, b::T) where T <: Number = FuncSeries(i -> a[i] * b)
+
+# Cauchy product of two series (requires caching)
+
+function *(a::AbstractSeries, b::AbstractSeries)
+    CachedSeries(d -> expand(sum(a[k] * b[d-k] for k in 0:d)))
 end
 
-function get_coeff(series::ElemMult, index)
-    return series.a[index] * series.b[index]
-end
-
-function ⊙(a::AbstractSeries, b::AbstractSeries)
-	return ElemMult(a, b)
-end
-
-# Division of series (requires invertible constant coefficient)
-
-struct Div <: CacheSeries
-    cache::Vector
-
-    a::AbstractSeries
-    b::AbstractSeries
-    Div(a, b) = new([], a, b)
-end
-
-function compute_coeff(series::Div, d)
-    if iszero(series.b[0])
-        error("constant coefficient of divisor is not invertible")
-    end
-
-    if d < 0
-        return 0
-    elseif d == 0
-        return series.a[0] / series.b[0]
-    else
-        s = 0
-        for k in 0:d-1
-            s += series[k] * series.b[d-k]
-        end
-        return expand((series.a[d] - s) / series.b[0])
-    end
-end
+# Division of series (requires invertible constant term and caching)
 
 function /(a::AbstractSeries, b::AbstractSeries)
-	return Div(a, b)
+    iszero(b[0]) && error("constant coefficient of divisor is not invertible")
+    ref = Ref{CachedSeries}()
+    ref[] = CachedSeries(function(d)
+        d == 0 && return a[0] / b[0]
+        s = sum(ref[][k] * b[d-k] for k in 0:d-1; init=zero(Num))
+        return expand((a[d] - s) / b[0])
+    end)
+    return ref[]
 end
 
 function inv(a::AbstractSeries)
     return 1 / a
 end
 
-function ^(a::AbstractSeries, e::Integer)
-	if e == 0
-		return FiniteSeries([1])
-	elseif e > 0
-		return a * (a ^ (e - 1))
-	else
-		return 1 / a^(-e)
-	end
-end
+# Exponentiation of series
 
+function ^(a::AbstractSeries, e::Integer)
+    if e == 0
+        return FiniteSeries([1])
+    elseif e > 0
+        return a * (a ^ (e - 1))
+    else
+        return 1 / a^(-e)
+    end
+end
 
 # Promotion rules
 
