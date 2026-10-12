@@ -140,6 +140,12 @@ end
     M5 = Matroid(matroid.Matroid(VECTORS=[1 0 0; 0 1 0; 1 1 0; 0 0 1; 1 2 3]))
     @test Symbolics.substitute(snapper_polynomial(M5), f_to_h(M5)) ≂ ehrhart_polynomial(M5)
 
+    # The Snapper polynomial from the volume polynomial (examples/snapper_volume.jl),
+    # also in rank 4
+    for N in (M, M5, Matroid(matroid.uniform_matroid(4, 5)))
+        @test snapper_polynomial_from_volume(N) ≂ snapper_polynomial(N)
+    end
+
     # Shifting each h_F by x ⟨u, ray_F⟩ for an integer vector u translates the normal
     # complex by a lattice vector, which changes neither its volume nor its lattice
     # points

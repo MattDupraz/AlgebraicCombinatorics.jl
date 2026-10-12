@@ -90,6 +90,19 @@ function volume_polynomial(M)
     return Symbolics.expand(vol)
 end
 
+# Snapper polynomial of M computed from its volume polynomial: write the volume
+# polynomial in the f basis, replace each monomial Π_F f_F^(a_F) by the product
+# of rising factorials Π_F f_F (f_F + 1) ... (f_F + a_F - 1), and translate by
+# f_E ↦ f_E + 1, with E the ground set. Agrees with snapper_polynomial(M).
+function snapper_polynomial_from_volume(M)
+    f = Symbolics.variables(:f, nonempty_flats(M))
+    f_E = Symbolics.variable(:f, flat_index(M, Set(ground_set(M))))
+
+    vol_f = Symbolics.expand(Symbolics.substitute(volume_polynomial(M), h_to_f(M)))
+    rising = to_rising_factorials(vol_f, f)
+    return Symbolics.expand(Symbolics.substitute(rising, Dict(f_E => f_E + 1)))
+end
+
 
 ####################
 # EHRHART POLYNOMIAL OF A CONE

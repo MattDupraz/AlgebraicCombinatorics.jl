@@ -47,7 +47,7 @@ export Matroid, svg_visual, ground_set, flat_index, meet, closure,
 
 # NormalComplexes.jl
 export hypercube_corner, hypercube_corners, simplex_signed_volume, hypercube_volume,
-    cone_volume_polynomial, volume_polynomial,
+    cone_volume_polynomial, volume_polynomial, snapper_polynomial_from_volume,
     to_matrix, primitive_vector, hypercube_tangent_cones, pseudo_cubical_cone,
     cone_ehrhart_polynomial,
     pseudo_cubical_heights, face_ehrhart_polynomials, ehrhart_contribution, ehrhart_polynomial
