@@ -1,0 +1,168 @@
+using Polymake: polytope
+using Combinatorics: powerset, permutations, levicivita
+using LinearAlgebra: I, det
+using Symbolics
+
+# Normal complexes: the combinatorial hypercubes cut out of simplicial cones by
+# a vector of heights h, their volumes, and their lattice point counts.
+#
+# Conventions: a cone is given by the matrix R whose rows are its rays, and h
+# assigns a height h_i to the i-th ray. The region of the cone cut out by
+# ⟨r_i, w⟩ <= h_i is a combinatorial hypercube whose corners are indexed by
+# the subsets J of rays, encoded as the binary digits of an integer k.
+
+# Lattice point counting and matroids, unless already included
+isdefined(@__MODULE__, :compute_lattice_count) || include("LinAlgTools.jl")
+isdefined(@__MODULE__, :Matroid) || include("Matroids.jl")
+
+
+####################
+# COMBINATORIAL HYPERCUBES
+####################
+
+# Corner k of the combinatorial hypercube cut out by h inside the cone with rays
+# the rows of R. Corner k corresponds to the set J of rays given by the binary
+# digits of k, and is the point w in span(R_J) with R_J * w = h_J.
+function get_w(R::AbstractMatrix{Rational{T}}, h, k) where T
+    J = [(k >> i) % 2 == 1 for i in 0:size(R, 1)-1]
+    # Corner 0 is the origin
+    if iszero(J)
+        return zero(R[1, :])
+    end
+    # Restrict h and R to the rays in J
+    h_ = h[J]
+    R_ = R[J, :]
+    # Find the point that projects to h_ in the span of R_
+    return R_' * inv(R_ * R_') * h_
+end
+
+# All 2^d corners of the combinatorial hypercube, in the order of get_w
+function get_ws(R::AbstractMatrix{Rational{T}}, h) where T <: Integer
+    return map(k -> get_w(R, h, k), 0:2^size(R, 1) - 1)
+end
+
+# Signed volume of the simplex spanned by the origin and the rows of R
+function simplex_signed_volume(R)
+    return det(R) / factorial(size(R, 1))
+end
+
+# Volume of the combinatorial hypercube with vertices verts (indexed as in get_ws).
+# Uses the staircase triangulation of the cube: for each permutation σ, the
+# simplex with vertices 0, e_σ1, e_σ1 + e_σ2, ..., weighted by the sign of σ so
+# that all simplices are counted with the same orientation.
+function hypercube_volume(verts)
+    n = Int(log2(length(verts)))
+    vol = 0
+    for flag in permutations(1:n)
+        edges = map(1:n) do i
+            vert_index = sum(1 .<< (flag[1:i] .- 1)) + 1
+            verts[vert_index] - verts[1]
+        end
+        R = reduce(hcat, edges)'
+        vol += levicivita(flag) * simplex_signed_volume(R)
+    end
+    return vol
+end
+
+
+####################
+# VOLUME POLYNOMIAL
+####################
+
+# Volume of the combinatorial hypercube in the cone with rays the rows of R,
+# as a polynomial in vars, measured in the coordinates given by pairing with the rays
+function cone_volume_polynomial(R, vars)
+    verts = get_ws(R, vars) .|> w -> Vector(R * w)
+    sgn = sign(det(R * R'))
+
+    return sgn * hypercube_volume(verts)
+end
+
+# Volume polynomial of the matroid M in the variables h_F: the sum of the cone
+# volume polynomials over the maximal cones of the Bergman fan
+function volume_polynomial(M)
+    dim = maximum(length.(chains(M)))
+    cones = filter(c -> length(c) == dim, chains(M))
+
+    vol = 0
+    for cone in cones
+        R = reduce(hcat, [get_ray_gen(M, F) for F in cone])'
+        vars = Symbolics.variables(:h, cone)
+
+        vol += cone_volume_polynomial(R, vars)
+    end
+    return Symbolics.expand(vol)
+end
+
+
+####################
+# EHRHART POLYNOMIAL OF A CONE
+####################
+
+# Matrix whose rows are the vectors vs
+function to_matrix(vs)
+    return reduce(vcat, [v' for v in vs])
+end
+
+# Primitive integer vector on the ray through r
+function ray_gen(r)
+    return r // gcd(r...)
+end
+
+# Tangent cones (rays as rows) at the vertices of a combinatorial hypercube with
+# vertices verts (indexed as in get_ws). The rays at a vertex are the primitive
+# edge directions towards its d neighbours, which differ from it in one binary digit.
+function get_hypercube_cones(verts::AbstractVector{<:AbstractVector{Rational{T}}}) where T <: Integer
+    dim = Int(log2(length(verts)))
+    cones = Matrix{Rational{T}}[]
+    for i in 1:length(verts)
+        base = verts[i]
+        rays = []
+        for j in 0:dim-1
+            v = verts[xor(i - 1, 1 << j) + 1]
+            push!(rays, ray_gen(v - base))
+        end
+        push!(cones, to_matrix(rays))
+    end
+    return cones
+end
+
+# Polymake cone of the heights h for which the region cut out by h inside the
+# cone with rays the rows of R is a genuine (pseudo-cubical) hypercube:
+# h >= 0, and each corner w_J lies on the correct side of the remaining facets.
+function get_pseudo_cubical_cone(R)
+    n = size(R, 1)
+    inequalities = []
+    push!(inequalities, Matrix{Rational}(I, n, n))
+    # We need each facet of the polytope to be a hypercube
+    # so the orthogonal projection of the vertex on each cone must lie in its
+    # relative interior
+    for J in powerset(1:n, 1, n-1)
+        # projection matrix onto subspace generated by facet J
+        # For any w in the span, with Rw = h, we have w = Ah
+        A = R[J, :]' * inv(R[J, :] * R[J, :]')
+        for j in setdiff(1:n, J)
+            # These inequalities come from Proposition 3.1, which essentially state that w_J belongs to the polytope cut out by the half-planes
+            # The original inequality is r_j * w_J <= h_j for all j not in J
+            # We have w_J = A_J * h_J and here we also take the transpose since we work with rows
+            ineq = zeros(Rational, n)
+            ineq[j] = 1
+            ineq[J] = -A' * R[j, :]
+            push!(inequalities, ineq)
+        end
+    end
+    return polytope.Cone(INEQUALITIES=reduce(hcat, inequalities)')
+end
+
+# Number of lattice points of the combinatorial hypercube cut out by the
+# heights vars inside the cone with rays the rows of R, as a polynomial in vars.
+# Points are measured in the coordinates B' * w. The tangent cones at the
+# vertices are taken from the hypercube at the pseudo-cubical heights h_pc
+# (see get_pseudo_cubical_cone), which has the same combinatorial type.
+function cone_ehr(B::AbstractMatrix{Rational{T}}, R::AbstractMatrix{Rational{T}}, vars, h_pc) where T <: Integer
+    verts_pc = get_ws(R, h_pc) .|> w -> Vector{Rational{T}}(B' * w)
+    cones = get_hypercube_cones(verts_pc)
+    verts = get_ws(R, vars) .|> w -> Vector(B' * w)
+
+    return compute_lattice_count(cones, verts)
+end

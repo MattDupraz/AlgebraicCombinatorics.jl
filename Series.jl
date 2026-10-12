@@ -54,7 +54,7 @@ GeometricSeries(elem) = Series(i -> elem^i)
 
 # Binomial series: coefficients of (1 + t)^x
 
-BinomialSeries(x) = Series(i -> i == 0 ? oneunit(x)//1 : prod(j -> (x-j+1)//j, 1:i))
+BinomialSeries(x) = Series(i -> prod(j -> (x-j+1) * (1//j), 1:i; init=1//1))
 
 # Exponential series: exp(t) around t=0
 
