@@ -114,6 +114,61 @@ end
     @variables h1 h2
     p = cone_ehrhart_polynomial(R, R, [h1, h2], [1//1, 1//1])
     @test p ≂ (h1 + 1) * (h2 + 1)
+
+    # Rank 2: the normal complex is three segments [0, h_F] glued at the origin
+    @test ehrhart_polynomial(M) ≂ 1 + sum(h)
+
+    # Rank 3: the top degree part is the volume polynomial, and the constant term is 1
+    M = Matroid(matroid.uniform_matroid(3, 4))
+    ehr = ehrhart_polynomial(M)
+    vol = volume_polynomial(M)
+    @test Symbolics.degree(Symbolics.expand(ehr - vol)) <= 1
+    zero_heights = Dict(Symbolics.variable(:h, F) => 0 for F in nonempty_proper_flats(M))
+    @test Symbolics.substitute(ehr, zero_heights) ≂ 1
+
+    @test_throws ErrorException ehrhart_polynomial(Matroid(matroid.uniform_matroid(4, 4)))
+
+    # Ehrhart polynomial = Snapper polynomial after the change of variables, for the
+    # matroid with maximal proper flats ad, bd, cd, abc (examples/snapper_ehrhart.jl)
+    M = Matroid(matroid.Matroid(VECTORS=[1 0 0; 0 1 0; 1 1 0; 0 0 1]))
+    snap = snapper_polynomial(M)
+    ehr = ehrhart_polynomial(M)
+    @test Symbolics.substitute(snap, f_to_h(M)) ≂ ehr
+    @test Symbolics.substitute(ehr, h_to_f(M)) ≂ snap
+
+    # Same on 5 elements, with {a, b, c} the only non-trivial line (notebooks/notebook_5.jl)
+    M5 = Matroid(matroid.Matroid(VECTORS=[1 0 0; 0 1 0; 1 1 0; 0 0 1; 1 2 3]))
+    @test Symbolics.substitute(snapper_polynomial(M5), f_to_h(M5)) ≂ ehrhart_polynomial(M5)
+
+    # Shifting each h_F by x ⟨u, ray_F⟩ for an integer vector u translates the normal
+    # complex by a lattice vector, which changes neither its volume nor its lattice
+    # points (notebooks/notebook_2.jl)
+    @variables x
+    for N in (M, M5)
+        n = length(bergman_ray(N, first(nonempty_proper_flats(N))))
+        ehr, vol = ehrhart_polynomial(N), volume_polynomial(N)
+        for u in ([1; zeros(Int, n - 1)], [0; 1; -1; zeros(Int, n - 3)], [2, -1, 3, 1][1:n])
+            shift = Dict(Symbolics.variable(:h, F) => Symbolics.variable(:h, F) + x * sum(u .* bergman_ray(N, F))
+                         for F in nonempty_proper_flats(N))
+            @test Symbolics.substitute(ehr, shift) ≂ ehr
+            @test Symbolics.substitute(vol, shift) ≂ vol
+        end
+    end
+
+    # The Ehrhart polynomial does not depend on the choice of lattice coordinates B
+    # (notebooks/notebook_4.jl): B is built from row additions and a row permutation
+    function unimodular_example(n)
+        B = Matrix{Rational{Int}}(I, n, n)
+        for i in 1:n, j in 1:n
+            i != j && (B[i, :] += (-1)^(i + j) * B[j, :])
+        end
+        return B[[n; 1:n-1], :]
+    end
+    for N in (M, M5)
+        B = unimodular_example(length(bergman_ray(N, first(nonempty_proper_flats(N)))))
+        @test abs(det(B)) == 1
+        @test ehrhart_polynomial(N; B=B) ≂ ehrhart_polynomial(N)
+    end
 end
 
 end

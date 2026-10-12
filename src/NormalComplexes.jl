@@ -82,7 +82,7 @@ function volume_polynomial(M)
 
     vol = 0
     for cone in cones
-        R = reduce(hcat, [bergman_ray(M, F) for F in cone])'
+        R = bergman_cone_rays(M, cone)
         vars = Symbolics.variables(:h, cone)
 
         vol += cone_volume_polynomial(R, vars)
@@ -161,4 +161,66 @@ function cone_ehrhart_polynomial(B::AbstractMatrix{Rational{T}}, R::AbstractMatr
     verts = hypercube_corners(R, vars) .|> w -> Vector(B' * w)
 
     return lattice_count(cones, verts)
+end
+
+
+####################
+# EHRHART POLYNOMIAL OF A MATROID
+####################
+
+# Pseudo-cubical heights for each cone (chain of flats) of the Bergman fan of M:
+# a relative interior point of pseudo_cubical_cone for the rays of the cone
+function pseudo_cubical_heights(M; B=I)
+    return Dict(cone => Vector{Rational}(pseudo_cubical_cone(bergman_cone_rays(M, cone; B=B)).REL_INT_POINT)
+                for cone in chains(M))
+end
+
+# Lattice point counts of the faces of the hypercubes of the Bergman fan of M.
+# The entry (cone, face) is the count for the hypercube of the face (a subchain
+# of cone), measured in the coordinates given by pairing with the rays of cone.
+function face_ehrhart_polynomials(M; B=I, h_pc=pseudo_cubical_heights(M; B=B))
+    polynomials = Dict()
+    for cone in chains(M)
+        r = bergman_cone_rays(M, cone; B=B)
+        vars = Symbolics.variables(:h, cone)
+        for J in powerset(1:length(cone), 1)
+            face = cone[J]
+            polynomials[(cone, face)] = cone_ehrhart_polynomial(r', r[J, :], vars[J], h_pc[face])
+        end
+    end
+    return polynomials
+end
+
+# Contribution of a cone c of dimension 1 or 2 to the Ehrhart polynomial, where
+# P = face_ehrhart_polynomials(M):
+#   dimension 1:  P(c, c) - 1
+#   dimension 2:  P(c, c) - 1/2 Σ_{rays ρ of c} (P(c, ρ) + P(ρ, ρ)) + 1
+function ehrhart_contribution(cone, polynomials)
+    if length(cone) == 1
+        return polynomials[(cone, cone)] - 1
+    elseif length(cone) == 2
+        result = polynomials[(cone, cone)] + 1
+        for ray in (cone[1:1], cone[2:2])
+            result -= 1//2 * (polynomials[(cone, ray)] + polynomials[(ray, ray)])
+        end
+        return result
+    else
+        error("ehrhart_contribution is only implemented for cones of dimension at most 2")
+    end
+end
+
+# Ehrhart polynomial of the normal complex of M in the variables h_F: the sum of
+# the contributions of all cones of the Bergman fan, plus 1 for the origin.
+# Only implemented when all cones have dimension at most 2 (M of rank at most 3).
+function ehrhart_polynomial(M; B=I, polynomials=nothing)
+    cones = chains(M)
+    if maximum(length.(cones)) > 2
+        error("ehrhart_polynomial is only implemented for Bergman fans with cones of dimension at most 2")
+    end
+    if polynomials === nothing
+        polynomials = face_ehrhart_polynomials(M; B=B)
+    end
+
+    ehr = 1 + sum(ehrhart_contribution(cone, polynomials) for cone in cones)
+    return Symbolics.expand(ehr)
 end

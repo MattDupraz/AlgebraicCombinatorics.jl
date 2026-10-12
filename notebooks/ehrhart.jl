@@ -7,7 +7,7 @@ using InteractiveUtils
 # ╔═╡ 312dfd9d-e4d0-4fac-a2eb-0191020ff66a
 begin
 	import Pkg
-	Pkg.activate(@__DIR__)
+	Pkg.activate(joinpath(@__DIR__, ".."))
 	Pkg.instantiate()
 	using AlgebraicCombinatorics
 	using Polymake: matroid, graph
@@ -17,108 +17,67 @@ begin
 end
 
 # ╔═╡ 845a0f6b-6628-4ee6-a89b-0b6ec31b6187
-function compute_polynomials(M; B=I)	
-	cones = chains(M)
-	polynomials = Dict()
+# Face polynomials from face_ehrhart_polynomials, plus the counts
+# (cone, face, subface) of each subface measured in the lattice spanned by face
+function compute_polynomials(M; B=I)
+	h_pc = pseudo_cubical_heights(M; B=B)
+	polynomials = face_ehrhart_polynomials(M; B=B, h_pc=h_pc)
 
-	pseudocubical_values = Dict()
-
-	for cone in cones
-		R = reduce(hcat, [B * bergman_ray(M, F) for F in cone])'
-		pseudo_cubical = pseudo_cubical_cone(R)
-		h_pc = Vector{Rational}(pseudo_cubical.REL_INT_POINT)
-		pseudocubical_values[cone] = h_pc
-	end
-
-	for i in 1:length(cones)
-		cone = cones[i]
-		r = reduce(hcat, [B * bergman_ray(M, F) for F in cone])'
+	for cone in chains(M)
+		r = bergman_cone_rays(M, cone; B=B)
 		vars = Sym.variables(:h, cone)
 		for J in powerset(1:length(cone), 1)
-			subcone = cone[J]
-			subcone_r = r[J, :]
-			subcone_vars = vars[J]
-
-			f = cone_ehrhart_polynomial(r', subcone_r, subcone_vars, pseudocubical_values[subcone])
-			polynomials[(cone, subcone)] = f
+			lat_basis = lattice_basis_inside_span(r[J, :] * r')
 			for J_ in powerset(J, 1)
-				subsubcone = cone[J_]
-				subsubcone_r = r[J_, :]
-				subsubcone_vars = vars[J_]
-
-				lat_basis = lattice_basis_inside_span(subcone_r * r')
-	
-				f = cone_ehrhart_polynomial(r' * lat_basis', subsubcone_r, subsubcone_vars, pseudocubical_values[subsubcone])
-				polynomials[(cone, subcone, subsubcone)] = f
+				polynomials[(cone, cone[J], cone[J_])] =
+					cone_ehrhart_polynomial(r' * lat_basis', r[J_, :], vars[J_], h_pc[cone[J_]])
 			end
 		end
-    end
-	
-    return polynomials
+	end
+
+	return polynomials
 end
 
 # ╔═╡ 634a0421-25b5-4bb6-963f-916f310ab4ed
 x = Sym.variables(:x, 1:10)
 
 # ╔═╡ 097e42ca-56ed-4a03-8ba8-0d8faafa849d
-function ehrhart_polynomial(M; B=I, polynomials=nothing)
-	if polynomials == nothing
+# Extends ehrhart_polynomial (cones of dimension at most 2) with a conjectural
+# contribution for cones of dimension 3
+function ehrhart_polynomial_dim3(M; B=I, polynomials=nothing)
+	if polynomials === nothing
 		polynomials = compute_polynomials(M; B=B)
 	end
-	
-    n = length(nonempty_proper_flats(M))
 
-	cones = chains(M)
-	dim = maximum(length.(cones))
-	cones_by_dim = [filter(c -> length(c) == d, cones) for d in 1:dim]	
-    ehr = 0
-	if (dim >= 3)
-	    for (i, cone) in enumerate(cones_by_dim[3])
-	        r = reduce(hcat, [bergman_ray(M, F) for F in cone])'
-	        vars = Sym.variables(:h, cone)
-	
-			result = 0
-			result += polynomials[(cone, cone)]
-			for j in 1:3
-				J = [k != j for k in 1:3]
-				subcone = cone[J]
-				result -= 1//2 * (polynomials[(cone, subcone)] + polynomials[(subcone, subcone)])
-	
-				for k in (1:3)[J]
-					ray = cone[k:k]
-					#result += 1//6 * (polynomials[(cone, ray)] + polynomials[(subcone, ray)] + polynomials[(ray, ray)])
-					#result += x[1] * (polynomials[(cone, subcone, ray)])
-					result += 1//6 * polynomials[(subcone, ray)]
-				end
-	
-				result += 1//3 *(polynomials[(cone, cone[j:j])] + polynomials[(cone[j:j], cone[j:j])])
-			end
-			result -= 1
-	
-			ehr += result
-	    end
-	end
-	
-    for (i, cone) in enumerate(cones_by_dim[2])
+	ehr = 1
+	for cone in chains(M)
+		if length(cone) <= 2
+			ehr += ehrhart_contribution(cone, polynomials)
+			continue
+		end
+
 		result = 0
 		result += polynomials[(cone, cone)]
-		result -= 1//2 * (polynomials[(cone, cone[1:1])] +
-						polynomials[(cone[1:1], cone[1:1])])
-		result -= 1//2 * (polynomials[(cone, cone[2:2])] +
-						polynomials[(cone[2:2], cone[2:2])])
-		result += 1
+		for j in 1:3
+			J = [k != j for k in 1:3]
+			subcone = cone[J]
+			result -= 1//2 * (polynomials[(cone, subcone)] + polynomials[(subcone, subcone)])
+
+			for k in (1:3)[J]
+				ray = cone[k:k]
+				#result += 1//6 * (polynomials[(cone, ray)] + polynomials[(subcone, ray)] + polynomials[(ray, ray)])
+				#result += x[1] * (polynomials[(cone, subcone, ray)])
+				result += 1//6 * polynomials[(subcone, ray)]
+			end
+
+			result += 1//3 *(polynomials[(cone, cone[j:j])] + polynomials[(cone[j:j], cone[j:j])])
+		end
+		result -= 1
 
 		ehr += result
-    end
+	end
 
-    for cone in cones_by_dim[1]
-        ehr += polynomials[(cone, cone)] - 1
-    end
-
-    ehr += 1
-
-    ehr = Sym.expand(ehr)
-    return ehr
+	return Sym.expand(ehr)
 end
 
 # ╔═╡ f7f4ca84-bf8f-4962-a898-b92412db4bdd
@@ -159,7 +118,7 @@ snap_h = Sym.expand(Sym.substitute(snap, f_to_h(M)));
 
 # ╔═╡ 37b7624b-f0d1-434f-83c6-1dbff3265525
 #=╠═╡
-p = snap_h - ehrhart_polynomial(M; polynomials=polynomials)
+p = snap_h - ehrhart_polynomial_dim3(M; polynomials=polynomials)
   ╠═╡ =#
 
 # ╔═╡ 89e3aa92-021f-4a9e-8c5a-e17c01d51e0c

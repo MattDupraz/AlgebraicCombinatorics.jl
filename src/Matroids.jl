@@ -194,6 +194,12 @@ function bergman_ray(M, F)
     return v_proj
 end
 
+# Rays (as rows) of the cone of the Bergman fan given by a chain of flats,
+# optionally in the coordinates given by the matrix B
+function bergman_cone_rays(M, cone; B=I)
+    return reduce(hcat, [B * bergman_ray(M, F) for F in cone])'
+end
+
 
 ####################
 # CHANGE OF VARIABLES

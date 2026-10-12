@@ -33,11 +33,11 @@ M = Matroid(matroid.uniform_matroid(3, 4))
 volume_polynomial(M)
 ```
 
-The Pluto notebooks in the repository (`ehrhart_notebook.jl`, `lambda_rings/`)
+The Pluto notebooks are in `notebooks/`. `ehrhart.jl` and `lambda_rings.jl`
 activate this project in their first cell, so they work from a clone of the
-repository. `examples/` contains standalone scripts, run with
-`julia --project=. examples/<script>.jl`. The notebooks in `notebooks/` are
-archived and self-contained.
+repository. `notebook_1.jl` to `notebook_6.jl` are archived early experiments
+and self-contained. `examples/` contains standalone scripts, run with
+`julia --project=. examples/<script>.jl`.
 
 ## Tests
 
