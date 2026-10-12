@@ -136,13 +136,13 @@ end
     @test Symbolics.substitute(snap, f_to_h(M)) ≂ ehr
     @test Symbolics.substitute(ehr, h_to_f(M)) ≂ snap
 
-    # Same on 5 elements, with {a, b, c} the only non-trivial line (notebooks/notebook_5.jl)
+    # Same on 5 elements, with {a, b, c} the only non-trivial line
     M5 = Matroid(matroid.Matroid(VECTORS=[1 0 0; 0 1 0; 1 1 0; 0 0 1; 1 2 3]))
     @test Symbolics.substitute(snapper_polynomial(M5), f_to_h(M5)) ≂ ehrhart_polynomial(M5)
 
     # Shifting each h_F by x ⟨u, ray_F⟩ for an integer vector u translates the normal
     # complex by a lattice vector, which changes neither its volume nor its lattice
-    # points (notebooks/notebook_2.jl)
+    # points
     @variables x
     for N in (M, M5)
         n = length(bergman_ray(N, first(nonempty_proper_flats(N))))
@@ -155,8 +155,8 @@ end
         end
     end
 
-    # The Ehrhart polynomial does not depend on the choice of lattice coordinates B
-    # (notebooks/notebook_4.jl): B is built from row additions and a row permutation
+    # The Ehrhart polynomial does not depend on the choice of lattice coordinates B,
+    # here built from row additions and a row permutation
     function unimodular_example(n)
         B = Matrix{Rational{Int}}(I, n, n)
         for i in 1:n, j in 1:n
