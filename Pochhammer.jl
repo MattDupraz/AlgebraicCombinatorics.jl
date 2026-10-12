@@ -18,7 +18,7 @@ end
 
 function rising_factorial(x, n::Int)
     if n < 0
-        error("Falling factorial exponent must be non-negative.")
+        error("Rising factorial exponent must be non-negative.")
     elseif n == 0
         return 1
     elseif n == 1
@@ -32,7 +32,7 @@ function rising_factorial(x, n::Int)
     end
 end
 
-function pochhammer(expr, vars)
+function to_falling_factorials(expr, vars)
 	coeffs = Symbolics.polynomial_coeffs(expr, vars)[1]
 	result = 0
 	for (monom, coeff) in coeffs
@@ -49,7 +49,7 @@ function pochhammer(expr, vars)
 	return Symbolics.expand(result)
 end
 
-function pochhammer_rising(expr, vars)
+function to_rising_factorials(expr, vars)
 	coeffs = Symbolics.polynomial_coeffs(expr, vars)[1]
 	result = 0
 	for (monom, coeff) in coeffs

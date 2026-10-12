@@ -13,7 +13,7 @@ function todd_class(d)
     T = to_elementary(prod([ToddSeries(a) for a in A]), A; sym=:c)
 end
 
-function todd_class_grassmanian(k, n)
+function todd_class_grassmannian(k, n)
     A = Symbolics.variables(:a, 1:k) # Chern roots of the tautological line bundle
     B = Symbolics.variables(:b, 1:(n - k)) # Chern roots of the quotient bundle
     
@@ -26,7 +26,7 @@ end
 # Compute coeffs for Grassmanian(2, 4)
 k = 2
 n = 4
-T = todd_class_grassmanian(k, n)
+T = todd_class_grassmannian(k, n)
 
 # Since [S ⊗ Q] = [O], we know that the product of the chern classes is 1 in the Chow ring
 S_inv = inv(Series([1; Symbolics.variables(:s, 1:2)]))

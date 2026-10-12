@@ -54,7 +54,7 @@ function svg_visual(M::Matroid)
     SVGVisual(M.pm_matroid.LATTICE_OF_FLATS)
 end
 
-function groundset(M::Matroid)
+function ground_set(M::Matroid)
     return 0:M.n_elements - 1
 end
 
@@ -64,23 +64,24 @@ end
 ####################
 
 # Index of the flat equal to the set S (nothing if S is not a flat)
-function get_flat_index(M, S)
+function flat_index(M, S)
     findfirst(map(F -> issetequal(S, F), M.flats))
 end
 
 # Meet (intersection) of the flats with indices Fs
 function meet(M, Fs)
     S = intersect([M.flats[i] for i in Fs]...)
-    get_flat_index(M, S)
+    flat_index(M, S)
 end
 
 # Closure of the set S: the smallest flat containing it
 function closure(M, S)
-    get_flat_index(M, intersect(filter(F -> S ⊆ F, M.flats)...))
+    flat_index(M, intersect(filter(F -> S ⊆ F, M.flats)...))
 end
 
-# Join of the flats with indices Fs: the closure of their union
-function join(M, Fs)
+# Join of the flats with indices Fs: the closure of their union.
+# A method of Base.join, so that join on strings keeps working.
+function Base.join(M::Matroid, Fs)
     S = union([M.flats[i] for i in Fs]...)
     closure(M, S)
 end
@@ -124,18 +125,18 @@ end
 
 # Iterates over the integer vectors m with 0 <= m[i] <= max_m[i] and sum(m) <= max_sum
 # (as plain integers rather than vectors if length(max_m) == 1)
-function m_vectors_iter(max_m, max_sum)
+function bounded_vectors(max_m, max_sum)
     if length(max_m) == 1
         return 0:min(max_m[1], max_sum)
     end
     return Iterators.flatmap(
-        n -> Iterators.product(n, m_vectors_iter(max_m[2:length(max_m)], max_sum - n))
+        n -> Iterators.product(n, bounded_vectors(max_m[2:length(max_m)], max_sum - n))
                 .|> t -> [t[1]; t[2]],
         0:min(max_m[1], max_sum))
 end
 
 # Iterates over the integer vectors (as tuples) between 0 and vec, componentwise
-function vectors_less_than(vec)
+function vectors_below(vec)
     return Iterators.product([0:n for n in vec]...)
 end
 
@@ -149,15 +150,15 @@ function snapper_polynomial(M)
 
     f = Symbolics.variables(:f, ne_flats)
 
-    ms = m_vectors_iter(max.(0, M.ranks[ne_flats] .- 1), M.rank) |> collect
+    ms = bounded_vectors(max.(0, M.ranks[ne_flats] .- 1), M.rank) |> collect
     snap = 0
 
     for (i, m) in enumerate(ms)
-        write("progress", "$i/$(length(ms)) $m")
+        #write("progress", "$i/$(length(ms)) $m")
 
         # Check the Dragon-Hall-Rado condition for m
         dragon_hall_rado = true
-        for m_ in collect(vectors_less_than(m))
+        for m_ in collect(vectors_below(m))
             if all(iszero, m_)
                 continue
             end
@@ -187,8 +188,8 @@ end
 
 # Ray of the Bergman fan for the flat F: the indicator vector of F modulo the
 # all-ones vector, represented by subtracting the last coordinate and dropping it
-function get_ray_gen(M, F)
-    v = Rational[e in M.flats[F] for e in groundset(M)] * BigInt(1)
+function bergman_ray(M, F)
+    v = Rational[e in M.flats[F] for e in ground_set(M)] * BigInt(1)
     v_proj = v[1:length(v) - 1] .- last(v)
     return v_proj
 end
@@ -218,7 +219,7 @@ function h_to_f(M)
     h = Symbolics.variables(:h, nep_flats)
 
     # Hyperplane class
-    H = [groundset(M)[1] ∈ M.flats[F] for F in nep_flats]
+    H = [ground_set(M)[1] ∈ M.flats[F] for F in nep_flats]
     # A is a change of basis from L_F to D_F
     A = Rational.(reduce(hcat, [H - [M.flats[F] ⊆ M.flats[G] for G in nep_flats]
                                 for F in nonempty_flats(M)]))

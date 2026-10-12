@@ -344,14 +344,14 @@ function simplicial_cone_dual(A::AbstractMatrix{Rational{T}}) where T <: Integer
     for i in 1:size(A, 1)
         facet = A[setdiff(1:end, i), :]
         normal = orthogonal_complement(facet)
-        ray_gen = normal//gcd(normal)
+        ray = normal//gcd(normal)
 
         # Orient the normal to point to the same side as the i-th ray
-        if sign(det([A[1:i-1, :]; ray_gen; A[i+1:end, :]])) != sign(A_det)
-            ray_gen = -ray_gen
+        if sign(det([A[1:i-1, :]; ray; A[i+1:end, :]])) != sign(A_det)
+            ray = -ray
         end
 
-        push!(rays, ray_gen)
+        push!(rays, ray)
     end
 
     return reduce(vcat, rays)
@@ -470,7 +470,7 @@ end
 # Enumerates ℕ^dim: the binary digits of k are dealt out to the coordinates in
 # turn, so every non-negative integer vector is reached for some k
 
-function get_an_integer_vector(k, dim)
+function nth_natural_vector(k, dim)
     result = zeros(Int, dim)
     e = 0
     while k != 0
@@ -486,10 +486,10 @@ end
 # Finds an integer vector lambda with ⟨r, lambda⟩ != 0 for every row r of A,
 # so that no denominator in brion_coefficient vanishes
 
-function find_good_lambda(A)
+function generic_lambda(A)
     k = 1
     while true
-        lambda = get_an_integer_vector(k, size(A, 2))
+        lambda = nth_natural_vector(k, size(A, 2))
         if all(A * lambda .!= 0)
             return lambda
         end
@@ -500,10 +500,10 @@ end
 # Number of lattice points of the polytope with the given integer vertices,
 # where cones[i] is the tangent cone at vertices[i] (rays as rows)
 
-function compute_lattice_count(cones::AbstractVector{<:AbstractMatrix{Rational{T}}},
+function lattice_count(cones::AbstractVector{<:AbstractMatrix{Rational{T}}},
         vertices::AbstractVector{<:AbstractVector}) where T <: Integer
     decompositions = cones .|> barvinok_decomposition
-    lambda = find_good_lambda(reduce(vcat, [cone.matrix for cone in flatten(decompositions)]))
+    lambda = generic_lambda(reduce(vcat, [cone.matrix for cone in flatten(decompositions)]))
     result = 0
     for (decomposition, vertex) in zip(decompositions, vertices)
         for cone in decomposition
@@ -517,7 +517,7 @@ end
 # cyclic order. The tangent cone at each vertex is spanned by the primitive
 # edge directions towards its two neighbours.
 
-function polytope_lattice_count(vertices)
+function polygon_lattice_count(vertices)
     n = length(vertices)
     cones = map(1:n) do i
         r1 = vertices[(n+i-2)%n + 1] - vertices[i]  # Previous vertex
@@ -526,5 +526,5 @@ function polytope_lattice_count(vertices)
         r2 = r2//gcd(r2)
         [r1' ; r2']
     end
-    return compute_lattice_count(cones, vertices)
+    return lattice_count(cones, vertices)
 end

@@ -12,7 +12,7 @@ using Symbolics
 # the subsets J of rays, encoded as the binary digits of an integer k.
 
 # Lattice point counting and matroids, unless already included
-isdefined(@__MODULE__, :compute_lattice_count) || include("LinAlgTools.jl")
+isdefined(@__MODULE__, :lattice_count) || include("LinAlgTools.jl")
 isdefined(@__MODULE__, :Matroid) || include("Matroids.jl")
 
 
@@ -23,7 +23,7 @@ isdefined(@__MODULE__, :Matroid) || include("Matroids.jl")
 # Corner k of the combinatorial hypercube cut out by h inside the cone with rays
 # the rows of R. Corner k corresponds to the set J of rays given by the binary
 # digits of k, and is the point w in span(R_J) with R_J * w = h_J.
-function get_w(R::AbstractMatrix{Rational{T}}, h, k) where T
+function hypercube_corner(R::AbstractMatrix{Rational{T}}, h, k) where T
     J = [(k >> i) % 2 == 1 for i in 0:size(R, 1)-1]
     # Corner 0 is the origin
     if iszero(J)
@@ -36,9 +36,9 @@ function get_w(R::AbstractMatrix{Rational{T}}, h, k) where T
     return R_' * inv(R_ * R_') * h_
 end
 
-# All 2^d corners of the combinatorial hypercube, in the order of get_w
-function get_ws(R::AbstractMatrix{Rational{T}}, h) where T <: Integer
-    return map(k -> get_w(R, h, k), 0:2^size(R, 1) - 1)
+# All 2^d corners of the combinatorial hypercube, in the order of hypercube_corner
+function hypercube_corners(R::AbstractMatrix{Rational{T}}, h) where T <: Integer
+    return map(k -> hypercube_corner(R, h, k), 0:2^size(R, 1) - 1)
 end
 
 # Signed volume of the simplex spanned by the origin and the rows of R
@@ -46,7 +46,7 @@ function simplex_signed_volume(R)
     return det(R) / factorial(size(R, 1))
 end
 
-# Volume of the combinatorial hypercube with vertices verts (indexed as in get_ws).
+# Volume of the combinatorial hypercube with vertices verts (indexed as in hypercube_corners).
 # Uses the staircase triangulation of the cube: for each permutation σ, the
 # simplex with vertices 0, e_σ1, e_σ1 + e_σ2, ..., weighted by the sign of σ so
 # that all simplices are counted with the same orientation.
@@ -72,7 +72,7 @@ end
 # Volume of the combinatorial hypercube in the cone with rays the rows of R,
 # as a polynomial in vars, measured in the coordinates given by pairing with the rays
 function cone_volume_polynomial(R, vars)
-    verts = get_ws(R, vars) .|> w -> Vector(R * w)
+    verts = hypercube_corners(R, vars) .|> w -> Vector(R * w)
     sgn = sign(det(R * R'))
 
     return sgn * hypercube_volume(verts)
@@ -86,7 +86,7 @@ function volume_polynomial(M)
 
     vol = 0
     for cone in cones
-        R = reduce(hcat, [get_ray_gen(M, F) for F in cone])'
+        R = reduce(hcat, [bergman_ray(M, F) for F in cone])'
         vars = Symbolics.variables(:h, cone)
 
         vol += cone_volume_polynomial(R, vars)
@@ -105,14 +105,14 @@ function to_matrix(vs)
 end
 
 # Primitive integer vector on the ray through r
-function ray_gen(r)
+function primitive_vector(r)
     return r // gcd(r...)
 end
 
 # Tangent cones (rays as rows) at the vertices of a combinatorial hypercube with
-# vertices verts (indexed as in get_ws). The rays at a vertex are the primitive
+# vertices verts (indexed as in hypercube_corners). The rays at a vertex are the primitive
 # edge directions towards its d neighbours, which differ from it in one binary digit.
-function get_hypercube_cones(verts::AbstractVector{<:AbstractVector{Rational{T}}}) where T <: Integer
+function hypercube_tangent_cones(verts::AbstractVector{<:AbstractVector{Rational{T}}}) where T <: Integer
     dim = Int(log2(length(verts)))
     cones = Matrix{Rational{T}}[]
     for i in 1:length(verts)
@@ -120,7 +120,7 @@ function get_hypercube_cones(verts::AbstractVector{<:AbstractVector{Rational{T}}
         rays = []
         for j in 0:dim-1
             v = verts[xor(i - 1, 1 << j) + 1]
-            push!(rays, ray_gen(v - base))
+            push!(rays, primitive_vector(v - base))
         end
         push!(cones, to_matrix(rays))
     end
@@ -130,7 +130,7 @@ end
 # Polymake cone of the heights h for which the region cut out by h inside the
 # cone with rays the rows of R is a genuine (pseudo-cubical) hypercube:
 # h >= 0, and each corner w_J lies on the correct side of the remaining facets.
-function get_pseudo_cubical_cone(R)
+function pseudo_cubical_cone(R)
     n = size(R, 1)
     inequalities = []
     push!(inequalities, Matrix{Rational}(I, n, n))
@@ -158,11 +158,11 @@ end
 # heights vars inside the cone with rays the rows of R, as a polynomial in vars.
 # Points are measured in the coordinates B' * w. The tangent cones at the
 # vertices are taken from the hypercube at the pseudo-cubical heights h_pc
-# (see get_pseudo_cubical_cone), which has the same combinatorial type.
-function cone_ehr(B::AbstractMatrix{Rational{T}}, R::AbstractMatrix{Rational{T}}, vars, h_pc) where T <: Integer
-    verts_pc = get_ws(R, h_pc) .|> w -> Vector{Rational{T}}(B' * w)
-    cones = get_hypercube_cones(verts_pc)
-    verts = get_ws(R, vars) .|> w -> Vector(B' * w)
+# (see pseudo_cubical_cone), which has the same combinatorial type.
+function cone_ehrhart_polynomial(B::AbstractMatrix{Rational{T}}, R::AbstractMatrix{Rational{T}}, vars, h_pc) where T <: Integer
+    verts_pc = hypercube_corners(R, h_pc) .|> w -> Vector{Rational{T}}(B' * w)
+    cones = hypercube_tangent_cones(verts_pc)
+    verts = hypercube_corners(R, vars) .|> w -> Vector(B' * w)
 
-    return compute_lattice_count(cones, verts)
+    return lattice_count(cones, verts)
 end

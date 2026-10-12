@@ -48,22 +48,22 @@ function compute_polynomials(M; B=I)
 	pseudocubical_values = Dict()
 
 	for cone in cones
-		R = reduce(hcat, [B * get_ray_gen(M, F) for F in cone])'
-		pseudo_cubical = get_pseudo_cubical_cone(R)
+		R = reduce(hcat, [B * bergman_ray(M, F) for F in cone])'
+		pseudo_cubical = pseudo_cubical_cone(R)
 		h_pc = Vector{Rational}(pseudo_cubical.REL_INT_POINT)
 		pseudocubical_values[cone] = h_pc
 	end
 
 	for i in 1:length(cones)
 		cone = cones[i]
-		r = reduce(hcat, [B * get_ray_gen(M, F) for F in cone])'
+		r = reduce(hcat, [B * bergman_ray(M, F) for F in cone])'
 		vars = Sym.variables(:h, cone)
 		for J in powerset(1:length(cone), 1)
 			subcone = cone[J]
 			subcone_r = r[J, :]
 			subcone_vars = vars[J]
 
-			f = cone_ehr(r', subcone_r, subcone_vars, pseudocubical_values[subcone])
+			f = cone_ehrhart_polynomial(r', subcone_r, subcone_vars, pseudocubical_values[subcone])
 			polynomials[(cone, subcone)] = f
 			for J_ in powerset(J, 1)
 				subsubcone = cone[J_]
@@ -72,7 +72,7 @@ function compute_polynomials(M; B=I)
 
 				lat_basis = lattice_basis_inside_span(subcone_r * r')
 	
-				f = cone_ehr(r' * lat_basis', subsubcone_r, subsubcone_vars, pseudocubical_values[subsubcone])
+				f = cone_ehrhart_polynomial(r' * lat_basis', subsubcone_r, subsubcone_vars, pseudocubical_values[subsubcone])
 				polynomials[(cone, subcone, subsubcone)] = f
 			end
 		end
@@ -98,7 +98,7 @@ function ehrhart_polynomial(M; B=I, polynomials=nothing)
     ehr = 0
 	if (dim >= 3)
 	    for (i, cone) in enumerate(cones_by_dim[3])
-	        r = reduce(hcat, [get_ray_gen(M, F) for F in cone])'
+	        r = reduce(hcat, [bergman_ray(M, F) for F in cone])'
 	        vars = Sym.variables(:h, cone)
 	
 			result = 0
@@ -163,7 +163,7 @@ M.flats
 
 # ╔═╡ d65b475d-79f7-4227-a33c-045f83b3e5d0
 #=╠═╡
-[(F, M.flats[F], get_ray_gen(M, F)) for F in nonempty_flats(M)]
+[(F, M.flats[F], bergman_ray(M, F)) for F in nonempty_flats(M)]
   ╠═╡ =#
 
 # ╔═╡ a06ec159-edaf-441e-92ae-ebe60330bbb4
@@ -193,7 +193,7 @@ a = [Sym.coeff(p, Sym.variable(:h, i)) for i in 2:26]
 
 # ╔═╡ 1b3f732b-e2e1-409d-95b6-927a70936a78
 #=╠═╡
-collect(zip(a, [get_ray_gen(M, F) for F in 2:26], M.flats[2:26]))[a .!= 0]
+collect(zip(a, [bergman_ray(M, F) for F in 2:26], M.flats[2:26]))[a .!= 0]
   ╠═╡ =#
 
 # ╔═╡ 0f398106-1db4-491c-8ed2-24978cf9cc21
@@ -227,7 +227,7 @@ f = Sym.expand(Sym.substitute(volume_polynomial(P), sym_dict))
 Sym.polynomial_coeffs(f, Sym.variables(:h, 2:15))
 
 # ╔═╡ 0665a407-0de6-40b0-b312-cdb09a76fc3a
-f_poch = Sym.expand(pochhammer(f, Sym.variables(:g, 1:3)))
+f_poch = Sym.expand(to_falling_factorials(f, Sym.variables(:g, 1:3)))
 
 # ╔═╡ 6eb16052-ee49-44fd-921b-90a0b47db1d7
 h = f_poch - f
