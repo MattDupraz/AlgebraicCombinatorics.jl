@@ -1,0 +1,9 @@
+[deps]
+AlgebraicCombinatorics = "1ac45986-f8fe-47d7-a108-ba040a35905e"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Polymake = "d720cf60-89b5-51f5-aff5-213f193123e7"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+AlgebraicCombinatorics = {path = ".."}

@@ -1,37 +1,26 @@
 using Symbolics
 
-include("SymmetricPolynomials.jl")
-include("Series.jl")
+# Todd classes, expressed in Chern classes via symmetric polynomials
 
-
+# Todd series t / (1 - exp(-t)), and its version in the variable w*t
 ToddSeries() = inv((1 - ExpSeries(-1)) << 1)
 ToddSeries(w) = ToddSeries() ⊙  GeometricSeries(w)
 
+# Todd class of a rank d bundle, in its Chern classes c_1, ..., c_d
 function todd_class(d)
     A = Symbolics.variables(:a, 1:d)
 
     T = to_elementary(prod([ToddSeries(a) for a in A]), A; sym=:c)
 end
 
+# Todd class of the Grassmannian Gr(k, n), in the Chern classes s_i of the
+# tautological bundle and q_i of the quotient bundle
 function todd_class_grassmannian(k, n)
     A = Symbolics.variables(:a, 1:k) # Chern roots of the tautological line bundle
     B = Symbolics.variables(:b, 1:(n - k)) # Chern roots of the quotient bundle
-    
+
     T = to_elementary(
             to_elementary(prod([ToddSeries(-a + b) for a in A, b in B]), A; sym=:s),
             B; sym=:q)
     return T
 end
-
-# Compute coeffs for Grassmanian(2, 4)
-k = 2
-n = 4
-T = todd_class_grassmannian(k, n)
-
-# Since [S ⊗ Q] = [O], we know that the product of the chern classes is 1 in the Chow ring
-S_inv = inv(Series([1; Symbolics.variables(:s, 1:2)]))
-q_to_s = Dict([Symbolics.variable(:q, i) => S_inv[i] for i in 1:2])
-
-T = substitute(T, q_to_s)
-
-first_coeffs(T, k*(n - k))

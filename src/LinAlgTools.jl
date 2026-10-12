@@ -1,8 +1,5 @@
 using LinearAlgebra, DataStructures
-using Base.Iterators
-
-# BinomialSeries and Series (used in brion_coefficient), unless already included
-isdefined(@__MODULE__, :BinomialSeries) || include("Series.jl")
+using Base.Iterators: flatten
 
 # Exact linear algebra over ℚ and ℤ, lattice reduction, and Barvinok-style
 # lattice point counting for rational cones and polygons.

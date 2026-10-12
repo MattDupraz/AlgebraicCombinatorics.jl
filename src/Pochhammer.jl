@@ -46,7 +46,7 @@ function to_falling_factorials(expr, vars)
 
 		result += coeff * poch_monom
 	end
-	return Symbolics.expand(result)
+	return Symbolics.expand(Num(result))
 end
 
 function to_rising_factorials(expr, vars)
@@ -63,14 +63,14 @@ function to_rising_factorials(expr, vars)
 
 		result += coeff * poch_monom
 	end
-	return Symbolics.expand(result)
+	return Symbolics.expand(Num(result))
 end
 
 function vandermonde(vars)
 	result = 1
-	for i in 1:length(x)
-		for j in i+1:length(x)
-			result *= x[i] - x[j]
+	for i in 1:length(vars)
+		for j in i+1:length(vars)
+			result *= vars[i] - vars[j]
 		end
 	end
 	

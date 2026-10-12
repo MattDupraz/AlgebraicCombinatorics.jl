@@ -1,0 +1,47 @@
+# AlgebraicCombinatorics
+
+Julia tools for symbolic power series, symmetric polynomials, exact lattice
+computations, matroids and their normal complexes (volume and Ehrhart polynomials).
+
+| File | Contents |
+|---|---|
+| `src/Series.jl` | Formal power series, with named series (`BinomialSeries`, `ExpSeries`, …) |
+| `src/SymmetricPolynomials.jl` | Rewriting symmetric polynomials in elementary symmetric polynomials |
+| `src/Pochhammer.jl` | Falling and rising factorials |
+| `src/Grassmannians.jl` | Todd classes of bundles and Grassmannians |
+| `src/LinAlgTools.jl` | Exact linear algebra, LLL, Hermite normal form, Barvinok decomposition, lattice point counts |
+| `src/Matroids.jl` | Matroids via polymake, flats, Bergman fan rays, Snapper polynomial |
+| `src/NormalComplexes.jl` | Volume and Ehrhart polynomials of normal complexes |
+| `src/Cache.jl` | `@cache` macro storing results in `.cache/` |
+
+## Installation
+
+```julia
+pkg> add git@git.imp.fu-berlin.de:matthed69/juliatools.git
+```
+
+To edit the code, use `dev` instead of `add`, or clone the repository and run
+`pkg> dev path/to/juliatools`.
+
+## Usage
+
+```julia
+using AlgebraicCombinatorics
+using Polymake: matroid
+
+M = Matroid(matroid.uniform_matroid(3, 4))
+volume_polynomial(M)
+```
+
+The Pluto notebooks in the repository (`ehrhart_notebook.jl`, `lambda_rings/`)
+activate this project in their first cell, so they work from a clone of the
+repository. `examples/` contains standalone scripts, run with
+`julia --project=. examples/<script>.jl`. The notebooks in `notebooks/` are
+archived and self-contained.
+
+## Tests
+
+```julia
+pkg> activate .
+pkg> test
+```

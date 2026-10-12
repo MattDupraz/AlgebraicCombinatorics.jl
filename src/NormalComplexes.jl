@@ -11,10 +11,6 @@ using Symbolics
 # ⟨r_i, w⟩ <= h_i is a combinatorial hypercube whose corners are indexed by
 # the subsets J of rays, encoded as the binary digits of an integer k.
 
-# Lattice point counting and matroids, unless already included
-isdefined(@__MODULE__, :lattice_count) || include("LinAlgTools.jl")
-isdefined(@__MODULE__, :Matroid) || include("Matroids.jl")
-
 
 ####################
 # COMBINATORIAL HYPERCUBES
