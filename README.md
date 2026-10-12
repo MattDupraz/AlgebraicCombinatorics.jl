@@ -17,11 +17,11 @@ computations, matroids and their normal complexes (volume and Ehrhart polynomial
 ## Installation
 
 ```julia
-pkg> add git@git.imp.fu-berlin.de:matthed69/juliatools.git
+pkg> add git@git.imp.fu-berlin.de:matthed69/AlgebraicCombinatorics.jl.git
 ```
 
 To edit the code, use `dev` instead of `add`, or clone the repository and run
-`pkg> dev path/to/juliatools`.
+`pkg> dev path/to/AlgebraicCombinatorics.jl`.
 
 ## Usage
 
