@@ -1,13 +1,13 @@
 # NormalComplexes
 
 Julia code accompanying my research on matroids and their normal complexes,
-in particular their volume, Ehrhart and Snapper polynomials. It also contains
-the general tools this relies on (formal power series, rising and falling
-factorials, exact lattice computations), as well as Todd classes of
-Grassmannians and λ-ring computations that grew out of the same work.
+in particular their volume, Ehrhart and Snapper polynomials.
 
 This is research code rather than a polished library: the interface may change
 without notice.
+
+Most of this code was originally a collection of scripts I used for my research, which
+was later turned into a package with the help of an LLM. 
 
 | File | Contents |
 |---|---|
