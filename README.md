@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/logo.svg" alt="Normal complex of a matroid on four elements" width="160">
-</p>
-
 # AlgebraicCombinatorics
 
 Julia code accompanying my research on matroids and their normal complexes,
