@@ -1,4 +1,6 @@
-<img src="assets/logo.svg" alt="Normal complex of a matroid on four elements" width="160" align="right">
+<p align="center">
+  <img src="assets/logo.svg" alt="Normal complex of a matroid on four elements" width="160">
+</p>
 
 # AlgebraicCombinatorics
 
