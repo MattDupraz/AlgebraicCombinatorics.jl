@@ -1,7 +1,12 @@
 # AlgebraicCombinatorics
 
-Julia tools for symbolic power series, symmetric polynomials, exact lattice
-computations, matroids and their normal complexes (volume and Ehrhart polynomials).
+Julia code accompanying my research on matroids and their normal complexes,
+in particular their volume, Ehrhart and Snapper polynomials. It also contains
+the general tools this relies on: formal power series, symmetric polynomials
+and exact lattice computations.
+
+This is research code rather than a polished library: the interface may change
+without notice.
 
 | File | Contents |
 |---|---|
@@ -43,3 +48,7 @@ standalone scripts, run with `julia --project=. examples/<script>.jl`.
 pkg> activate .
 pkg> test
 ```
+
+## License
+
+MIT, see [`LICENSE`](LICENSE).
