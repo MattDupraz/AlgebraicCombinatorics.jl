@@ -9,7 +9,7 @@ begin
 	import Pkg
 	Pkg.activate(joinpath(@__DIR__, ".."))
 	Pkg.instantiate()
-	using AlgebraicCombinatorics
+	using NormalComplexes
 	using Polymake: matroid, graph
 	using Combinatorics: powerset
 	using LinearAlgebra: I

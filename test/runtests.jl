@@ -1,4 +1,4 @@
-using AlgebraicCombinatorics
+using NormalComplexes
 using Test
 using LinearAlgebra: det, I
 using Polymake: matroid
@@ -7,7 +7,7 @@ using Symbolics
 # Symbolic equality after expansion
 ≂(a, b) = iszero(Num(Symbolics.expand(a - b)))
 
-@testset "AlgebraicCombinatorics" begin
+@testset "NormalComplexes" begin
 
 @testset "Series" begin
     @variables x t
@@ -98,7 +98,7 @@ end
     @test Symbolics.substitute(Symbolics.substitute(vol, h_to_f(M)), f_to_h(M)) ≂ vol
 end
 
-@testset "NormalComplexes" begin
+@testset "Volume and Ehrhart polynomials" begin
     unit_cube = Vector{Rational{Int}}[[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
                                       [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]]
     @test hypercube_volume(unit_cube) == 1

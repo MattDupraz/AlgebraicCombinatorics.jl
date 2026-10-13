@@ -1,37 +1,38 @@
-# AlgebraicCombinatorics
+# NormalComplexes
 
 Julia code accompanying my research on matroids and their normal complexes,
 in particular their volume, Ehrhart and Snapper polynomials. It also contains
-the general tools this relies on: formal power series, symmetric polynomials
-and exact lattice computations.
+the general tools this relies on (formal power series, rising and falling
+factorials, exact lattice computations), as well as Todd classes of
+Grassmannians and λ-ring computations that grew out of the same work.
 
 This is research code rather than a polished library: the interface may change
 without notice.
 
 | File | Contents |
 |---|---|
-| `src/Series.jl` | Formal power series, with named series (`BinomialSeries`, `ExpSeries`, …) |
-| `src/SymmetricPolynomials.jl` | Rewriting symmetric polynomials in elementary symmetric polynomials |
-| `src/Pochhammer.jl` | Falling and rising factorials |
-| `src/Grassmannians.jl` | Todd classes of bundles and Grassmannians |
-| `src/LinAlgTools.jl` | Exact linear algebra, LLL, Hermite normal form, Barvinok decomposition, lattice point counts |
-| `src/Matroids.jl` | Matroids via polymake, flats, Bergman fan rays, Snapper polynomial |
-| `src/NormalComplexes.jl` | Volume and Ehrhart polynomials of normal complexes |
-| `src/Cache.jl` | `@cache` macro storing results in `.cache/` |
+| `src/series.jl` | Formal power series, with named series (`BinomialSeries`, `ExpSeries`, …) |
+| `src/symmetric_polynomials.jl` | Rewriting symmetric polynomials in elementary symmetric polynomials |
+| `src/pochhammer.jl` | Falling and rising factorials |
+| `src/grassmannians.jl` | Todd classes of bundles and Grassmannians |
+| `src/linalg_tools.jl` | Exact linear algebra, LLL, Hermite normal form, Barvinok decomposition, lattice point counts |
+| `src/matroids.jl` | Matroids via polymake, flats, Bergman fan rays, Snapper polynomial |
+| `src/normal_complexes.jl` | Volume and Ehrhart polynomials of normal complexes |
+| `src/cache.jl` | `@cache` macro storing results in `.cache/` |
 
 ## Installation
 
 ```julia
-pkg> add https://github.com/MattDupraz/AlgebraicCombinatorics.jl
+pkg> add https://github.com/MattDupraz/NormalComplexes.jl
 ```
 
 To edit the code, use `dev` instead of `add`, or clone the repository and run
-`pkg> dev path/to/AlgebraicCombinatorics.jl`.
+`pkg> dev path/to/NormalComplexes.jl`.
 
 ## Usage
 
 ```julia
-using AlgebraicCombinatorics
+using NormalComplexes
 using Polymake: matroid
 
 M = Matroid(matroid.uniform_matroid(3, 4))

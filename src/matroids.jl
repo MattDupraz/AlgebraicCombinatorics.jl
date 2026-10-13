@@ -5,7 +5,7 @@ using LinearAlgebra: I
 
 # Matroids via their lattice of flats (computed by polymake), together with the
 # rays of the Bergman fan and the Snapper polynomial. The volume polynomial is
-# in NormalComplexes.jl.
+# in normal_complexes.jl.
 #
 # Conventions: a flat is referred to by its index into M.flats, and the ground
 # set is 0:n-1 (polymake's numbering). Polynomials use Symbolics variables

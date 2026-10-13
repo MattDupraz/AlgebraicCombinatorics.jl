@@ -9,7 +9,7 @@
 #
 # Run from the repository root with: julia --project=. examples/snapper_volume.jl
 
-using AlgebraicCombinatorics
+using NormalComplexes
 using Polymake: matroid
 using Symbolics
 

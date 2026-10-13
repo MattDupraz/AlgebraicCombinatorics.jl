@@ -6,7 +6,7 @@
 #
 # Run from the repository root with: julia --project=. examples/snapper_ehrhart.jl
 
-using AlgebraicCombinatorics
+using NormalComplexes
 using Polymake: matroid
 using Symbolics
 

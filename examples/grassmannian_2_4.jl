@@ -1,7 +1,7 @@
 # Todd class of the Grassmannian Gr(2, 4), in the Chern classes of the tautological bundle.
 # Run from the repository root with: julia --project=. examples/grassmannian_2_4.jl
 
-using AlgebraicCombinatorics
+using NormalComplexes
 using Symbolics
 
 k = 2
