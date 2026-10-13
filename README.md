@@ -22,7 +22,7 @@ without notice.
 ## Installation
 
 ```julia
-pkg> add git@git.imp.fu-berlin.de:matthed69/AlgebraicCombinatorics.jl.git
+pkg> add https://github.com/MattDupraz/AlgebraicCombinatorics.jl
 ```
 
 To edit the code, use `dev` instead of `add`, or clone the repository and run
