@@ -6,7 +6,7 @@ in particular their volume, Ehrhart and Snapper polynomials.
 This is research code rather than a polished library: the interface may change
 without notice.
 
-Most of this code was originally a collection of scripts used in my research, which
+Most of this code was originally a collection of scripts I wrote for my research, which
 was later reorganized into a package with the help of an LLM. 
 
 | File | Contents |
